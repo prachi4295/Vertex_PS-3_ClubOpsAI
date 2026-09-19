@@ -18,3 +18,7 @@ dist-ssr/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Agent & Context files
+*antigravity_context*.md
+*ANTIGRAVITY_CONTEXT*.md
