@@ -1,0 +1,223 @@
+import { useState, useMemo } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import {
+  ArrowLeft,
+  Calendar,
+  MapPin,
+  Columns3,
+  Plus,
+  Star,
+  CheckCircle2,
+  Clock,
+  Sparkles,
+} from "lucide-react";
+import Header from "../components/Header";
+import KanbanBoard from "../components/KanbanBoard";
+import TaskModal from "../components/TaskModal";
+import { Badge } from "../components/ui";
+import Button from "../components/ui/Button";
+import { INITIAL_EVENTS } from "../data/multiEvents";
+import { useTasks } from "../hooks/useTasks";
+import { useApp } from "../hooks/useApp";
+
+const LOCAL_EVENTS_STORAGE_KEY = "clubops_all_events_list";
+
+/**
+ * Dedicated webpage for an event's full taskboard.
+ * Navigated to upon clicking an event from the Task Board directory.
+ */
+export default function EventTaskboardPage() {
+  const { eventId } = useParams();
+  const navigate = useNavigate();
+  const { goTasks } = useApp();
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+
+  // Retrieve event metadata from storage or presets
+  const event = useMemo(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
+      if (saved) {
+        const list = JSON.parse(saved);
+        const found = list.find((e) => e.id === eventId);
+        if (found) return found;
+      }
+    } catch (e) {
+      console.warn("Failed to load event metadata:", e);
+    }
+    const preset = INITIAL_EVENTS.find((e) => e.id === eventId);
+    if (preset) return preset;
+
+    // Fallback for custom or unknown IDs
+    return {
+      id: eventId,
+      name: eventId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      category: "Event",
+      tagline: "Dedicated event operations and taskboard.",
+      date: "2026-09-19",
+      location: "Campus Venue",
+      color: "secondary",
+    };
+  }, [eventId]);
+
+  const { tasks } = useTasks(eventId);
+
+  // Compute live stats for header
+  const stats = useMemo(() => {
+    const total = tasks.length;
+    const backlog = tasks.filter((t) => t.status === "backlog").length;
+    const todo = tasks.filter((t) => t.status === "todo").length;
+    const inProgress = tasks.filter((t) => t.status === "in_progress").length;
+    const done = tasks.filter((t) => t.status === "done").length;
+    const completionRate = total === 0 ? 0 : Math.round((done / total) * 100);
+
+    return { total, backlog, todo, inProgress, done, completionRate };
+  }, [tasks]);
+
+  const handleBackToDirectory = () => {
+    goTasks();
+    navigate("/");
+  };
+
+  return (
+    <div className="min-h-screen bg-neo-bg relative">
+      {/* Background textures */}
+      <div className="fixed inset-0 texture-halftone pointer-events-none" />
+      <div className="fixed inset-0 texture-grid pointer-events-none" />
+      <div className="fixed inset-0 texture-noise pointer-events-none" />
+
+      {/* Sticky header */}
+      <div className="relative z-40">
+        <Header />
+      </div>
+
+      {/* Page Content */}
+      <main className="relative z-10 max-w-[1440px] mx-auto px-4 py-6 sm:px-6 lg:px-8 space-y-6">
+        {/* ─── Breadcrumb & Navigation Bar ─── */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <button
+            type="button"
+            onClick={handleBackToDirectory}
+            className={[
+              "inline-flex items-center gap-2 px-3.5 py-2 bg-neo-white text-neo-ink border-3 border-neo-ink font-black text-xs uppercase tracking-wider",
+              "shadow-neo-sm hover:shadow-neo hover:bg-neo-bg transition-all duration-100 ease-linear cursor-pointer",
+              "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
+            ].join(" ")}
+          >
+            <ArrowLeft size={16} strokeWidth={3} />
+            <span>← Back to Event Directory</span>
+          </button>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black text-neo-ink/50 uppercase tracking-widest hidden sm:inline-block">
+              Directory / {event.name}
+            </span>
+            <Badge color="accent" rotate className="!text-[10px] !px-2.5 !py-0.5">
+              Live Board
+            </Badge>
+          </div>
+        </div>
+
+        {/* ─── Event Header Banner ─── */}
+        <div className="bg-neo-white border-4 border-neo-ink p-5 sm:p-6 shadow-neo flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="space-y-2 flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                color={event.id === "hackgenesis-2026" ? "accent" : "secondary"}
+                className="!text-xs !px-3 !py-0.5 font-black uppercase !border-2"
+              >
+                {event.category}
+              </Badge>
+
+              <span className="flex items-center gap-1.5 text-xs font-bold text-neo-ink/80 uppercase">
+                <Calendar size={14} strokeWidth={3} />
+                {event.date}
+              </span>
+
+              {event.location && (
+                <span className="flex items-center gap-1.5 text-xs font-bold text-neo-ink/60 uppercase">
+                  <MapPin size={14} strokeWidth={3} />
+                  {event.location}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-baseline gap-3">
+              <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight text-neo-ink">
+                {event.name}
+              </h1>
+              <span className="text-sm font-black text-neo-ink/60 uppercase tracking-wider">
+                • {stats.total} Total Tasks
+              </span>
+            </div>
+
+            {event.tagline && (
+              <p className="text-xs sm:text-sm font-bold text-neo-ink/70 uppercase">
+                {event.tagline}
+              </p>
+            )}
+          </div>
+
+          {/* Quick Metrics & Add Task */}
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6 shrink-0">
+            {/* Status Breakdown Pills */}
+            <div className="flex items-center gap-2 text-xs font-black uppercase">
+              <span className="bg-neo-muted border-2 border-neo-ink px-2.5 py-1 shadow-[2px_2px_0_#000]">
+                {stats.backlog} Backlog
+              </span>
+              <span className="bg-neo-white border-2 border-neo-ink px-2.5 py-1 shadow-[2px_2px_0_#000]">
+                {stats.todo} To Do
+              </span>
+              <span className="bg-neo-secondary border-2 border-neo-ink px-2.5 py-1 shadow-[2px_2px_0_#000]">
+                {stats.inProgress} In Progress
+              </span>
+              <span className="bg-neo-ink text-neo-white border-2 border-neo-ink px-2.5 py-1 shadow-[2px_2px_0_#000]">
+                {stats.done} Done
+              </span>
+            </div>
+
+            {/* Progress Gauge */}
+            <div className="w-32 hidden lg:block">
+              <div className="flex justify-between items-center text-[10px] font-black uppercase mb-1">
+                <span>Completed</span>
+                <span>{stats.completionRate}%</span>
+              </div>
+              <div className="w-full h-3.5 bg-neo-white border-2 border-neo-ink p-0.5 shadow-[2px_2px_0_#000]">
+                <div
+                  className="h-full bg-neo-accent border border-neo-ink transition-all duration-300"
+                  style={{ width: `${stats.completionRate}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Add Task Button */}
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => setTaskModalOpen(true)}
+              className="!h-10 !text-xs !px-4 shadow-[2px_2px_0_#000]"
+            >
+              <Plus size={16} strokeWidth={3} />
+              Add Task
+            </Button>
+          </div>
+        </div>
+
+        {/* ─── Dedicated Kanban Board ─── */}
+        <div className="pb-8">
+          <KanbanBoard
+            eventId={eventId}
+            eventTitle={`${event.name} — Kanban Board`}
+          />
+        </div>
+      </main>
+
+      {/* Task Modal for adding tasks directly to this board */}
+      <TaskModal
+        open={taskModalOpen}
+        onClose={() => setTaskModalOpen(false)}
+        task={null}
+        eventId={eventId}
+      />
+    </div>
+  );
+}

@@ -1,737 +1,247 @@
-⚡ ChronOps
-Unified Event Command Center
-AI-powered task management + real-time schedule reflow for seamless event execution.
+# ⚡ ClubOps Studio (ChronOps)
+> **Unified Event Command Center for Student Clubs & Hackathons**  
+> AI-powered task management + real-time schedule reflow for seamless event execution.  
+> Built with **React 19**, **Vite**, **Google Gemini**, **Firebase (Firestore & Auth)**, and designed with **Neo-brutalist aesthetics**.
+
+---
+
+## 🌟 Overview
 
 ChronOps is an all-in-one event operations platform built for fast-moving clubs, hackathons, conferences, and live events.
+It features two core operating modes:
+1. **Operations Mode**: Turn raw meeting notes or voice transcripts into actionable Kanban tasks, monitor real-time event risk with the **Event Health Radar**, and organize tasks across Backlog, To Do, In Progress, and Done.
+2. **Live Stage Mode**: Full-screen confidence anchor view for MCs featuring live countdown timers, overrun tracking (turns accent red past zero), instant `+5m`/`+10m` schedule reflow, on-demand AI speaker intros, 60-second emergency filler scripts, and phonetic pronunciation guides.
 
-It combines AI-powered meeting intelligence with a real-time schedule reflow engine, helping organizers turn messy discussions into actionable tasks and keep events running even when schedules fall behind.
+---
 
-🎯 The Problem
-Event operations often break down because of two recurring problems:
+## 🎨 Design System: Strict Neo-Brutalism
 
-📝 Meeting decisions get lost
-Unstructured meeting notes make it difficult to identify tasks, assign responsibilities, and track deadlines.
+- **Zero gradients, zero blur, zero gray text**.
+- Hard contrast: `#FFFDF5` background, `#000000` text & thick borders (`border-2`, `border-3`, `border-4`).
+- Hard box shadows: `box-shadow: 4px 4px 0 #000`, `8px 8px 0 #000`.
+- Neo-brutalist palette:
+  - Cream: `#FFFDF5`
+  - Onyx Black: `#000000`
+  - Hot Coral (Overdue / Risk / Slip Warning / Overrun): `#FF6B6B`
+  - Canary Yellow (In Progress / AI Badges): `#FFD93D`
+  - Pastel Lavender (Done / Flexible Badges): `#C4B5FD`
+  - Pure Card White: `#FFFFFF`
+- Accessible dual-ring keyboard focus states (`:focus-visible`).
+- Full support for `prefers-reduced-motion: reduce`.
 
-⏱️ Live schedules are fragile
-When a session runs over time, organizers have to manually recalculate the remaining schedule, creating delays and communication chaos.
+---
 
-ChronOps solves both.
-Meeting → AI → Tasks → Execution → Real-time Reflow
+## 🔑 Environment Variables Setup
 
-🚀 Key Features
-🤖 1. AI Meeting Note Ingestion
-Turn messy meeting discussions into structured, actionable tasks.
+In `chronops-frontend/`, copy `.env.example` to `.env`:
 
-Organizers can paste raw meeting notes or transcripts into ChronOps. Using Google Gemini 2.5 Flash, the system automatically extracts:
+```bash
+cd chronops-frontend
+cp .env.example .env
+```
 
-📌 Task title
+Your `.env` file requires:
 
-👤 Assignee
+```ini
+# Firebase Configuration
+VITE_FIREBASE_API_KEY=your_firebase_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
 
-📅 Deadline
+# Google Gemini Configuration
+VITE_GEMINI_API_KEY=your_gemini_api_key
+VITE_GEMINI_MODEL=gemini-2.0-flash
+```
 
-🗂️ Structured task information
+> **Local Demo Fallback**: If Firebase or Gemini credentials are not supplied, ChronOps automatically operates in **Local Demo Mode** using in-memory / `localStorage` stores and built-in static template fallbacks, allowing full offline testing!
 
-The extracted tasks are automatically stored in the database and displayed on the Kanban board.
+---
 
-Example
-Meeting:
-"Rahul will handle the stage setup before 5 PM.
-Priya will contact the speakers by tomorrow."
+## 🔥 Firebase Setup Guide
 
-              ↓ Gemini AI
+### 1. Create a Firebase Project
+1. Navigate to the [Firebase Console](https://console.firebase.google.com/) and click **Add Project**.
+2. Set your project name (e.g., `clubops-studio`) and create the project.
 
-┌─────────────────────────────────────┐
-│ Stage Setup                         │
-│ Assignee: Rahul                     │
-│ Deadline: 5:00 PM                   │
-├─────────────────────────────────────┤
-│ Contact Speakers                    │
-│ Assignee: Priya                     │
-│ Deadline: Tomorrow                  │
-└─────────────────────────────────────┘
-⏱️ 2. Dynamic Time-Reflow Engine
-Live events rarely follow the original schedule.
+### 2. Enable Authentication
+1. Go to **Build > Authentication** > **Sign-in method**.
+2. Enable **Google** sign-in (set support email and save).
+3. Enable **Anonymous** sign-in (enables "Continue as demo" mode without logging into personal accounts).
 
-ChronOps automatically recalculates the run-sheet when delays occur.
+### 3. Create Cloud Firestore Database
+1. Go to **Build > Firestore Database** and click **Create Database**.
+2. Select your nearest region and start in **production mode**.
+3. Deploy the security rules from `firestore.rules`:
+   ```javascript
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       function isAuthenticated() {
+         return request.auth != null;
+       }
+       function isEventOwner(eventId) {
+         return isAuthenticated() &&
+           request.auth.uid == get(/databases/$(database)/documents/events/$(eventId)).data.ownerId;
+       }
+       match /events/{eventId} {
+         allow read: if isAuthenticated();
+         allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
+         allow update, delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+       }
+       match /tasks/{taskId} {
+         allow read: if isAuthenticated();
+         allow create: if isAuthenticated() && isEventOwner(request.resource.data.eventId);
+         allow update, delete: if isAuthenticated() && isEventOwner(resource.data.eventId);
+       }
+       match /sessions/{sessionId} {
+         allow read: if isAuthenticated();
+         allow create: if isAuthenticated() && isEventOwner(request.resource.data.eventId);
+         allow update, delete: if isAuthenticated() && isEventOwner(resource.data.eventId);
+       }
+     }
+   }
+   ```
 
-🔒 Fixed Slots
-Critical sessions that cannot move.
+### 4. Register Web App & Config
+1. In Firebase Project Overview, click **Add App (`</>`)** to create a Web App.
+2. Copy the credentials into `chronops-frontend/.env`.
 
-Examples:
+---
 
-Keynote
+## 🤖 Google Gemini API Key Setup
 
-Guest appearance
+1. Obtain a Gemini API key at [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. Add `VITE_GEMINI_API_KEY` to `chronops-frontend/.env`.
 
-External speaker
+### 🛡️ Restricting Your Gemini Key & Client Exposure Note
 
-Venue booking constraint
+> **Security & Best Practices**:  
+> Because frontend builds bundle `VITE_*` environment variables in client-side code, anyone inspecting browser network calls can view the key if left unrestricted.
+>
+> Follow these two recommended tiers:
 
-🔄 Flexible Slots
-Sessions that can automatically absorb delays.
+#### Tier 1 (Immediate / Hackathon / Dev): Restrict Key by HTTP Referrer
+Lock down your API key in Google Cloud Console so it **only** executes requests originating from your authorized domains:
+1. Go to the [Google Cloud Console Credentials Page](https://console.cloud.google.com/apis/credentials).
+2. Select your Google Cloud / Firebase project.
+3. Click your **Gemini API Key** to open its settings.
+4. Under **Application restrictions**, select **Websites (HTTP referrers)**.
+5. Click **Add an Item** and enter your authorized URLs:
+   - `http://localhost:5173/*` (local development)
+   - `http://127.0.0.1:5173/*`
+   - `https://<your-project-id>.web.app/*` (your production Firebase domain)
+   - `https://<your-project-id>.firebaseapp.com/*`
+6. Under **API restrictions**, choose **Restrict key** and check **Generative Language API** (or Vertex AI API).
+7. Click **Save**. Any request originating from other websites or third-party tools will be rejected with `403 Forbidden`.
 
-Examples:
+#### Tier 2 (Production / Enterprise): Serverless Cloud Function Proxy
+For production deployments where you want zero API key exposure to the browser, route AI requests through Firebase Cloud Functions (2nd Gen):
 
-Panel discussions
+```
+┌─────────────────┐       Firebase Auth Token        ┌─────────────────────────┐       GEMINI_API_KEY        ┌──────────────┐
+│  React Frontend │ ───────────────────────────────> │  Firebase Cloud Function│ ──────────────────────────> │ Google Gemini│
+│ (ChronOps App)  │ <─────────────────────────────── │  (Node.js / onCall)     │ <────────────────────────── │   API / SDK  │
+└─────────────────┘        Structured JSON           └─────────────────────────┘      Generative Output      └──────────────┘
+```
 
-Q&A
+**Implementation Pattern**:
+1. Store the API key in Firebase Secret Manager:
+   ```bash
+   firebase functions:secrets:set GEMINI_API_KEY
+   ```
+2. Create an `onCall` function in `functions/index.js`:
+   ```javascript
+   const { onCall, HttpsError } = require("firebase-functions/v2/https");
+   const { defineSecret } = require("firebase-functions/params");
+   const { GoogleGenAI } = require("@google/genai");
 
-Breaks
+   const geminiSecret = defineSecret("GEMINI_API_KEY");
 
-Internal sessions
+   exports.extractTasks = onCall({ secrets: [geminiSecret] }, async (request) => {
+     // Verify user is authenticated
+     if (!request.auth) {
+       throw new HttpsError("unauthenticated", "Authentication required.");
+     }
+     const ai = new GoogleGenAI({ apiKey: geminiSecret.value() });
+     const response = await ai.models.generateContent({
+       model: "gemini-2.0-flash",
+       contents: request.data.notes,
+     });
+     return JSON.parse(response.text);
+   });
+   ```
+3. Call it securely from the frontend without any client-side API key:
+   ```javascript
+   import { getFunctions, httpsCallable } from "firebase/functions";
+   const functions = getFunctions();
+   const extractTasks = httpsCallable(functions, "extractTasks");
+   const result = await extractTasks({ notes: userNotes });
+   ```
 
-Example
-ORIGINAL SCHEDULE
+---
 
-10:00  Opening
-10:30  Keynote        🔒 Fixed
-11:30  Panel          🔄 Flexible
-12:15  Q&A            🔄 Flexible
-12:45  Lunch          🔄 Flexible
+## 🚀 Running Locally
 
-
-              +15 MIN DELAY
-                    ↓
-
-
-REFLOWED SCHEDULE
-
-10:15  Opening
-10:45  Keynote        🔒 Fixed
-11:30  Panel          🔄 Compressed
-12:15  Q&A            🔄 Flexible
-12:45  Lunch          🔄 Flexible
-Organizers can simulate this directly from the dashboard using the:
-
-+15m Delay Simulator
-No manual recalculation.
-No spreadsheet chaos.
-Just an updated run-sheet.
-
-🖥️ 3. Unified Command Center
-ChronOps provides a single dashboard for both planning and execution.
-
-Run-Sheet View
-Monitor the live event timeline and immediately see:
-
-Current session
-
-Upcoming sessions
-
-Delays
-
-Fixed constraints
-
-Reflowed timings
-
-Kanban View
-Track operational tasks using a simple workflow:
-
-┌──────────────┬──────────────┬──────────────┐
-│ TODO         │ IN PROGRESS  │ DONE         │
-├──────────────┼──────────────┼──────────────┤
-│ Stage Setup  │ Speaker Call │ Registration │
-│ AV Check     │ Banner       │ Volunteers   │
-│ Guest Kit    │              │              │
-└──────────────┴──────────────┴──────────────┘
-🏗️ Architecture
-                 ┌──────────────────────┐
-                 │      React UI        │
-                 │ Vite + Tailwind CSS  │
-                 └──────────┬───────────┘
-                            │
-                         REST API
-                            │
-                            ▼
-                 ┌──────────────────────┐
-                 │       FastAPI        │
-                 │      Backend         │
-                 └───────┬───────┬──────┘
-                         │       │
-             ┌───────────┘       └────────────┐
-             ▼                                ▼
-     ┌────────────────┐              ┌─────────────────┐
-     │    SQLite      │              │   Gemini AI     │
-     │   Database     │              │  2.5 Flash      │
-     └────────────────┘              └─────────────────┘
-             │
-             ▼
-     ┌────────────────┐
-     │ Reflow Engine  │
-     │ Delay Handling │
-     └────────────────┘
-🛠️ Tech Stack
-Layer	Technology
-🎨 Frontend	React, Vite
-💅 Styling	Tailwind CSS
-🎯 Icons	Lucide React
-🔌 API	FastAPI
-🐍 Backend	Python
-🗄️ Database	SQLite
-🧩 ORM	SQLAlchemy
-🤖 AI	Google Gemini 2.5 Flash
-📡 HTTP Client	Axios
-🚀 Server	Uvicorn
-📂 Project Structure
-Vertex_PS-3_ClubOpsAI/
-│
-├── chronops-backend/
-│   │
-│   ├── main.py
-│   │   ├── FastAPI entrypoint
-│   │   ├── API routes
-│   │   └── Database initialization
-│   │
-│   ├── database.py
-│   │   └── SQLAlchemy + SQLite configuration
-│   │
-│   ├── models.py
-│   │   └── Database models
-│   │
-│   ├── ai_service.py
-│   │   └── Gemini AI integration
-│   │
-│   ├── reflow_engine.py
-│   │   └── Schedule delay & compression logic
-│   │
-│   └── chronops.db
-│       └── SQLite database
-│
-└── chronops-frontend/
-    │
-    ├── src/
-    │   └── App.jsx
-    │       └── Main dashboard
-    │
-    ├── package.json
-    └── tailwind.config.js
-⚙️ How ChronOps Works
-          MEETING
-             │
-             ▼
-      Meeting Notes
-             │
-             ▼
-        Gemini AI
-             │
-             ▼
-     Structured Tasks
-             │
-             ▼
-       ┌───────────┐
-       │  Kanban   │
-       │  Board    │
-       └───────────┘
-
-
-        LIVE EVENT
-             │
-             ▼
-       Session Delay
-             │
-             ▼
-      Reflow Engine
-             │
-       ┌─────┴─────┐
-       ▼           ▼
-   Fixed Slots  Flexible Slots
-       │           │
-       │      Compress / Shift
-       │           │
-       └─────┬─────┘
-             ▼
-       Updated Run-Sheet
-💡 Why ChronOps?
-Traditional event management often relies on a combination of:
-
-WhatsApp + Google Docs + Excel + Manual Calls
-ChronOps brings the operational workflow into one place:
-
-        PLAN
-         ↓
-      AI EXTRACT
-         ↓
-       ASSIGN
-         ↓
-      EXECUTE
-         ↓
-      MONITOR
-         ↓
-       REFLOW
-         ↓
-       DELIVER
-The goal is simple:
-
-When the plan changes, the system adapts with it.
-
-🚀 Getting Started
-Backend
-cd chronops-backend
-
-pip install -r requirements.txt
-
-uvicorn main:app --reload
-Backend will be available at:
-
-http://127.0.0.1:8000
-Frontend
+```bash
+# Navigate to frontend directory
 cd chronops-frontend
 
+# Install dependencies
 npm install
 
+# Start Vite dev server
 npm run dev
-The frontend will typically be available at:
+```
+Open `http://localhost:5173` in your browser.
 
-http://127.0.0.1:5173
-🔑 Environment Variables
-Create a .env file inside the backend:
+---
 
-GEMINI_API_KEY=your_api_key_here
-Never commit API keys or .env files to GitHub.
+## 🧪 Running Tests
 
-🧪 Core Modules
-ai_service.py
-Responsible for converting unstructured meeting text into structured task data using Gemini.
+Run the complete Vitest test suite covering the schedule reflow engine, time utilities, event health algorithms, and Gemini service invariants:
 
-reflow_engine.py
-Responsible for calculating schedule changes when sessions are delayed.
+```bash
+cd chronops-frontend
+npm test -- --run
+```
 
-models.py
-Defines the database entities for:
+All 79 unit and component tests will run and pass synchronously.
 
-Events
+---
 
-Sessions
+## 🚢 Firebase Hosting Deployment
 
-Tasks
+Both `firebase.json` and `chronops-frontend/firebase.json` are preconfigured with single-page app rewrites.
 
-Meeting notes
-
-main.py
-Connects the application components through FastAPI routes.
-
-🏆 Built For
-ChronOps can be used for:
-
-🎓 College festivals
-
-💻 Hackathons
-
-🎤 Conferences
-
-🎭 Cultural events
-
-🏢 Corporate events
-
-🏛️ Club operations
-
-🎪 Multi-stage events
-
-⚡ Core Idea
-ChronOps is not just an event planner.
-
-It is an execution engine designed to help organizers adapt when reality doesn't follow the plan.
-
-Plan less. React faster. Execute better.
-
-👥 Team
-Built with ❤️ during a 24-hour hackathon.
-
-ChronOps — Unified Event Command Center
-
-
-Add a prominent live demo link
-
-Yes. Put the live demo near the top, immediately after the project tagline, so judges/reviewers see it without scrolling.
-
-Use this section:
-
-ChronOps README
-⚡ ChronOps
-Unified Event Command Center
-AI-powered task management + real-time schedule reflow for seamless event execution.
-
-🚀 Live Demo
-👉 🔴 Launch ChronOps Live Demo →
-Try the command center:
-AI Meeting Notes → Task Extraction → Kanban → Live Run-Sheet → +15m Delay → Automatic Schedule Reflow
-
-ChronOps is an all-in-one event operations platform built for fast-moving clubs, hackathons, conferences, and live events.
-
-It combines AI-powered meeting intelligence with a real-time schedule reflow engine, helping organizers turn messy discussions into actionable tasks and keep events running even when schedules fall behind.
-
-Replace YOUR_LIVE_DEMO_URL with your deployed frontend URL, for example:
-
-https://chronops.vercel.app
-If you also have a deployed backend/API, you can add:
-
-| 🌐 Frontend | [Launch Demo](https://your-frontend-url.com) |
-| ⚡ Backend | [API](https://your-backend-url.com) |
-| 📖 API Docs | [Swagger](https://your-backend-url.com/docs) |
-For a hackathon README, I'd keep the big Live Demo button at the top and put API/GitHub links underneath it.
-
-
-
-
-Ad
-
-make md file
-
-Done. I created the complete Markdown README with the prominent Live Demo section at the top.
-
-
-Just replace YOUR_LIVE_DEMO_URL with your actual deployed frontend URL. 
-
-
-
-ChronOps_README.md
-
-
-⚡ ChronOps
-Unified Event Command Center
-AI-powered task management + real-time schedule reflow for seamless event execution.
-
-🚀 Live Demo
-👉 🔴 Launch ChronOps Live Demo →
-Try the command center:
-AI Meeting Notes → Task Extraction → Kanban → Live Run-Sheet → +15m Delay → Automatic Schedule Reflow
-
-ChronOps is an all-in-one event operations platform built for fast-moving clubs, hackathons, conferences, and live events.
-
-It combines AI-powered meeting intelligence with a real-time schedule reflow engine, helping organizers turn messy discussions into actionable tasks and keep events running even when schedules fall behind.
-
-🎯 The Problem
-Event operations often break down because of two recurring problems:
-
-📝 Meeting decisions get lost
-Unstructured meeting notes make it difficult to identify tasks, assign responsibilities, and track deadlines.
-
-⏱️ Live schedules are fragile
-When a session runs over time, organizers have to manually recalculate the remaining schedule, creating delays and communication chaos.
-
-ChronOps solves both.
-Meeting → AI → Tasks → Execution → Real-time Reflow
-
-🚀 Key Features
-🤖 1. AI Meeting Note Ingestion
-Turn messy meeting discussions into structured, actionable tasks.
-
-Organizers can paste raw meeting notes or transcripts into ChronOps. Using Google Gemini 2.5 Flash, the system automatically extracts:
-
-📌 Task title
-
-👤 Assignee
-
-📅 Deadline
-
-🗂️ Structured task information
-
-The extracted tasks are automatically stored in the database and displayed on the Kanban board.
-
-Example
-Meeting:
-"Rahul will handle the stage setup before 5 PM.
-Priya will contact the speakers by tomorrow."
-
-              ↓ Gemini AI
-
-┌─────────────────────────────────────┐
-│ Stage Setup                         │
-│ Assignee: Rahul                     │
-│ Deadline: 5:00 PM                   │
-├─────────────────────────────────────┤
-│ Contact Speakers                    │
-│ Assignee: Priya                     │
-│ Deadline: Tomorrow                  │
-└─────────────────────────────────────┘
-⏱️ 2. Dynamic Time-Reflow Engine
-Live events rarely follow the original schedule.
-
-ChronOps automatically recalculates the run-sheet when delays occur.
-
-🔒 Fixed Slots
-Critical sessions that cannot move.
-
-Examples:
-
-Keynote
-
-Guest appearance
-
-External speaker
-
-Venue booking constraint
-
-🔄 Flexible Slots
-Sessions that can automatically absorb delays.
-
-Examples:
-
-Panel discussions
-
-Q&A
-
-Breaks
-
-Internal sessions
-
-Example
-ORIGINAL SCHEDULE
-
-10:00  Opening
-10:30  Keynote        🔒 Fixed
-11:30  Panel          🔄 Flexible
-12:15  Q&A            🔄 Flexible
-12:45  Lunch          🔄 Flexible
-
-
-              +15 MIN DELAY
-                    ↓
-
-
-REFLOWED SCHEDULE
-
-10:15  Opening
-10:45  Keynote        🔒 Fixed
-11:30  Panel          🔄 Compressed
-12:15  Q&A            🔄 Flexible
-12:45  Lunch          🔄 Flexible
-Organizers can simulate this directly from the dashboard using the:
-
-+15m Delay Simulator
-No manual recalculation.
-No spreadsheet chaos.
-Just an updated run-sheet.
-
-🖥️ 3. Unified Command Center
-ChronOps provides a single dashboard for both planning and execution.
-
-Run-Sheet View
-Monitor the live event timeline and immediately see:
-
-Current session
-
-Upcoming sessions
-
-Delays
-
-Fixed constraints
-
-Reflowed timings
-
-Kanban View
-Track operational tasks using a simple workflow:
-
-┌──────────────┬──────────────┬──────────────┐
-│ TODO         │ IN PROGRESS  │ DONE         │
-├──────────────┼──────────────┼──────────────┤
-│ Stage Setup  │ Speaker Call │ Registration │
-│ AV Check     │ Banner       │ Volunteers   │
-│ Guest Kit    │              │              │
-└──────────────┴──────────────┴──────────────┘
-🏗️ Architecture
-                 ┌──────────────────────┐
-                 │      React UI        │
-                 │ Vite + Tailwind CSS  │
-                 └──────────┬───────────┘
-                            │
-                         REST API
-                            │
-                            ▼
-                 ┌──────────────────────┐
-                 │       FastAPI        │
-                 │      Backend         │
-                 └───────┬───────┬──────┘
-                         │       │
-             ┌───────────┘       └────────────┐
-             ▼                                ▼
-     ┌────────────────┐              ┌─────────────────┐
-     │    SQLite      │              │   Gemini AI     │
-     │   Database     │              │  2.5 Flash      │
-     └────────────────┘              └─────────────────┘
-             │
-             ▼
-     ┌────────────────┐
-     │ Reflow Engine  │
-     │ Delay Handling │
-     └────────────────┘
-🛠️ Tech Stack
-Layer	Technology
-🎨 Frontend	React, Vite
-💅 Styling	Tailwind CSS
-🎯 Icons	Lucide React
-🔌 API	FastAPI
-🐍 Backend	Python
-🗄️ Database	SQLite
-🧩 ORM	SQLAlchemy
-🤖 AI	Google Gemini 2.5 Flash
-📡 HTTP Client	Axios
-🚀 Server	Uvicorn
-📂 Project Structure
-Vertex_PS-3_ClubOpsAI/
-│
-├── chronops-backend/
-│   │
-│   ├── main.py
-│   │   ├── FastAPI entrypoint
-│   │   ├── API routes
-│   │   └── Database initialization
-│   │
-│   ├── database.py
-│   │   └── SQLAlchemy + SQLite configuration
-│   │
-│   ├── models.py
-│   │   └── Database models
-│   │
-│   ├── ai_service.py
-│   │   └── Gemini AI integration
-│   │
-│   ├── reflow_engine.py
-│   │   └── Schedule delay & compression logic
-│   │
-│   └── chronops.db
-│       └── SQLite database
-│
-└── chronops-frontend/
-    │
-    ├── src/
-    │   └── App.jsx
-    │       └── Main dashboard
-    │
-    ├── package.json
-    └── tailwind.config.js
-⚙️ How ChronOps Works
-          MEETING
-             │
-             ▼
-      Meeting Notes
-             │
-             ▼
-        Gemini AI
-             │
-             ▼
-     Structured Tasks
-             │
-             ▼
-       ┌───────────┐
-       │  Kanban   │
-       │  Board    │
-       └───────────┘
-
-
-        LIVE EVENT
-             │
-             ▼
-       Session Delay
-             │
-             ▼
-      Reflow Engine
-             │
-       ┌─────┴─────┐
-       ▼           ▼
-   Fixed Slots  Flexible Slots
-       │           │
-       │      Compress / Shift
-       │           │
-       └─────┬─────┘
-             ▼
-       Updated Run-Sheet
-💡 Why ChronOps?
-Traditional event management often relies on a combination of:
-
-WhatsApp + Google Docs + Excel + Manual Calls
-ChronOps brings the operational workflow into one place:
-
-        PLAN
-         ↓
-      AI EXTRACT
-         ↓
-       ASSIGN
-         ↓
-      EXECUTE
-         ↓
-      MONITOR
-         ↓
-       REFLOW
-         ↓
-       DELIVER
-The goal is simple:
-
-When the plan changes, the system adapts with it.
-
-🚀 Getting Started
-Backend
-cd chronops-backend
-
-pip install -r requirements.txt
-
-uvicorn main:app --reload
-Backend will be available at:
-
-http://127.0.0.1:8000
-Frontend
+```bash
 cd chronops-frontend
 
-npm install
+# 1. Build production bundle
+npm run build
 
-npm run dev
-The frontend will typically be available at:
+# 2. Login to Firebase
+firebase login
 
-http://127.0.0.1:5173
-🔑 Environment Variables
-Create a .env file inside the backend:
+# 3. Deploy
+firebase deploy --only hosting,firestore:rules
+```
 
-GEMINI_API_KEY=your_api_key_here
-Never commit API keys or .env files to GitHub.
+---
 
-🧪 Core Modules
-ai_service.py
-Responsible for converting unstructured meeting text into structured task data using Gemini.
+## 📋 Evaluation Checklist & Demo Flows
 
-reflow_engine.py
-Responsible for calculating schedule changes when sessions are delayed.
-
-models.py
-Defines the database entities for:
-
-Events
-
-Sessions
-
-Tasks
-
-Meeting notes
-
-main.py
-Connects the application components through FastAPI routes.
-
-🏆 Built For
-ChronOps can be used for:
-
-🎓 College festivals
-
-💻 Hackathons
-
-🎤 Conferences
-
-🎭 Cultural events
-
-🏢 Corporate events
-
-🏛️ Club operations
-
-🎪 Multi-stage events
-
-⚡ Core Idea
-ChronOps is not just an event planner.
-
-It is an execution engine designed to help organizers adapt when reality doesn't follow the plan.
-
-Plan less. React faster. Execute better.
-
-👥 Team
-Built with ❤️ during a 24-hour hackathon.
-
-ChronOps — Unified Event Command Center
-
+1. **Seed Demo Data**: Click **"Seed demo data"** in the bottom debug bar to populate "HackGenesis 2026" with 12 tasks across all 4 statuses and 10 sessions with realistic buffers.
+2. **AI Transcript Task Extraction**: In the **Club Intelligence** panel, paste meeting notes or click "Try sample transcript", then click **PROCESS WITH AI**. Tasks are parsed into JSON and batch-written into the Kanban Backlog with an Undo toast.
+3. **Interactive Kanban & Health Radar**: Drag cards between columns (or use card arrow buttons for keyboard/touch navigation). Notice the **Event Health Radar** (Task Completion %, Volunteer Allocation %, Risk Score) update dynamically in real time.
+4. **Schedule Reflow Engine**:
+   - In **Live Flow Preview**, click `+10m` on the live session.
+   - Subsequent flexible sessions shift back while buffer gaps absorb delay first.
+   - Fixed sessions (e.g., Inauguration, Lunch, Closing) remain anchored.
+   - Over-delaying triggers a high-visibility **Red Accent Slip Warning Banner** with explicit Confirm/Cancel protection.
+5. **Live Stage Confidence Monitor**:
+   - Tap **GO LIVE** in the header.
+   - Experience high-contrast typography, live countdown/overrun timer (counts up in red past zero), speaker bio, phonetic guides, and 1-click `+5m`/`+10m` delay adjustments.
+   - Use the hidden **Demo Controls** drawer to run the clock at `30x` or `60x` speed to simulate real-time stage progression.

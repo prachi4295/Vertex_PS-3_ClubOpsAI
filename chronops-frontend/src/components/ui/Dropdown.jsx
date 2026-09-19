@@ -10,6 +10,7 @@ export default function Dropdown({
   items = [],
   align = "right",
   className = "",
+  ariaLabel,
   children,
 }) {
   const [open, setOpen] = useState(false);
@@ -38,9 +39,11 @@ export default function Dropdown({
   return (
     <div ref={ref} className={["relative inline-block", className].join(" ")}>
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="true"
+        aria-label={ariaLabel}
         className="inline-flex items-center gap-1 cursor-pointer bg-transparent border-0 p-0 m-0"
       >
         {trigger}

@@ -6,6 +6,7 @@ import {
   KeyboardSensor,
   useSensor,
   useSensors,
+  useDroppable,
   closestCorners,
 } from "@dnd-kit/core";
 import {
@@ -37,9 +38,13 @@ const COLUMNS = [
  * Full Kanban board with @dnd-kit drag-and-drop, search filtering,
  * loading skeletons, empty states, and CRUD modal.
  */
-export default function KanbanBoard() {
+export default function KanbanBoard({
+  eventId,
+  eventTitle = "Task Board",
+  onCollapse,
+}) {
   const { searchQuery } = useApp();
-  const { tasks, loading, error, moveTask } = useTasks();
+  const { tasks, loading, error, moveTask } = useTasks(eventId);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -195,17 +200,29 @@ export default function KanbanBoard() {
           <span className="flex items-center justify-between w-full">
             <span className="flex items-center gap-2">
               <Columns3 size={16} strokeWidth={3} />
-              Task Board
+              <span>{eventTitle}</span>
             </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => openNewTask()}
-              className="!h-7 !text-[10px] !px-2 !border-2 !shadow-[2px_2px_0_#000]"
-            >
-              <Plus size={12} strokeWidth={3} />
-              Task
-            </Button>
+            <span className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => openNewTask()}
+                className="!h-7 !text-[10px] !px-2 !border-2 !shadow-[2px_2px_0_#000]"
+              >
+                <Plus size={12} strokeWidth={3} />
+                Task
+              </Button>
+              {onCollapse && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onCollapse}
+                  className="!h-7 !text-[10px] !px-2 !border-2"
+                >
+                  Collapse
+                </Button>
+              )}
+            </span>
           </span>
         }
         headerColor="bg-neo-white"
@@ -250,6 +267,7 @@ export default function KanbanBoard() {
           setEditingTask(null);
         }}
         task={editingTask}
+        eventId={eventId}
       />
     </>
   );
@@ -259,9 +277,16 @@ export default function KanbanBoard() {
 
 function KanbanColumn({ column, tasks, query, onEdit, onMove }) {
   const ColIcon = column.icon;
+  const { setNodeRef, isOver } = useDroppable({ id: column.key });
 
   return (
-    <div className="border-r-0 sm:border-r-4 sm:last:border-r-0 border-neo-ink min-h-[200px]">
+    <div
+      ref={setNodeRef}
+      className={[
+        "border-r-0 sm:border-r-4 sm:last:border-r-0 border-neo-ink min-h-[200px] flex flex-col transition-colors duration-100",
+        isOver ? "bg-neo-secondary/20" : "",
+      ].join(" ")}
+    >
       {/* Column header */}
       <div
         className={[

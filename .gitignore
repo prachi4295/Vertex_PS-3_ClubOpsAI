@@ -1,0 +1,20 @@
+# Logs & build artifacts
+node_modules/
+dist/
+dist-ssr/
+*.log
+
+# Environment variables & private keys
+.env
+.env.local
+.env.*.local
+*.env
+*.env.*
+!.env.example
+!chronops-frontend/.env.example
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

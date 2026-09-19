@@ -8,6 +8,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  writeBatch,
   Timestamp,
 } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../services/firebase";
@@ -195,7 +196,170 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
     [eventId]
   );
 
-  return { sessions, loading, error, addSession, updateSession, deleteSession };
+  // ─── Update multiple sessions with a single batch write ───
+  const updateSessionsBatch = useCallback(
+    async (updatedSessionsList) => {
+      if (!Array.isArray(updatedSessionsList) || updatedSessionsList.length === 0) return;
+
+      if (!isFirebaseConfigured || !db) {
+        setSessions((prev) => {
+          const updateMap = new Map(updatedSessionsList.map((s) => [s.id, s]));
+          const updated = prev.map((s) => (updateMap.has(s.id) ? { ...s, ...updateMap.get(s.id) } : s));
+          updated.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.startTime || "").localeCompare(b.startTime || ""));
+          saveLocalSessions(eventId, updated);
+          return updated;
+        });
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+        return;
+      }
+
+      const batch = writeBatch(db);
+      updatedSessionsList.forEach((s) => {
+        const ref = doc(db, "sessions", s.id);
+        const updates = {
+          startTime: s.startTime,
+          durationMinutes: s.durationMinutes,
+        };
+        if (s.order !== undefined) updates.order = s.order;
+        if (s.status !== undefined) updates.status = s.status;
+        if (s.actualStart !== undefined) {
+          updates.actualStart =
+            s.actualStart instanceof Date
+              ? Timestamp.fromDate(s.actualStart)
+              : s.actualStart;
+        }
+        batch.update(ref, updates);
+      });
+      await batch.commit();
+    },
+    [eventId]
+  );
+
+  // ─── Start session (sets status: 'live' and actualStart: Timestamp) ───
+  // ─── Start session (sets status: 'live' and actualStart: Timestamp) ───
+  const startSession = useCallback(
+    async (sessionId, customStartTime = null) => {
+      const now = customStartTime instanceof Date ? customStartTime : new Date();
+      const timestampVal = isFirebaseConfigured && db ? Timestamp.fromDate(now) : now;
+
+      // Also set any currently live session to completed
+      const otherLive = sessions.filter((s) => s.status === "live" && s.id !== sessionId);
+
+      if (!isFirebaseConfigured || !db) {
+        setSessions((prev) => {
+          const updated = prev.map((s) => {
+            if (s.id === sessionId) {
+              return { ...s, status: "live", actualStart: now };
+            }
+            if (s.status === "live") {
+              return { ...s, status: "completed" };
+            }
+            return s;
+          });
+          saveLocalSessions(eventId, updated);
+          return updated;
+        });
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+        return;
+      }
+
+      const batch = writeBatch(db);
+      otherLive.forEach((s) => {
+        batch.update(doc(db, "sessions", s.id), { status: "completed" });
+      });
+      batch.update(doc(db, "sessions", sessionId), {
+        status: "live",
+        actualStart: timestampVal,
+      });
+      await batch.commit();
+    },
+    [eventId, sessions]
+  );
+
+  // ─── Complete session (marks completed and makes next upcoming session live) ───
+  const completeSession = useCallback(
+    async (sessionId, customStartTime = null) => {
+      const now = customStartTime instanceof Date ? customStartTime : new Date();
+      const timestampVal = isFirebaseConfigured && db ? Timestamp.fromDate(now) : now;
+
+      // Find next upcoming session by order
+      const sortedUpcoming = [...sessions]
+        .filter((s) => s.status === "upcoming" && s.id !== sessionId)
+        .sort((a, b) => (a.order || 0) - (b.order || 0) || (a.startTime || "").localeCompare(b.startTime || ""));
+
+      const nextSession = sortedUpcoming[0] || null;
+
+      if (!isFirebaseConfigured || !db) {
+        setSessions((prev) => {
+          const updated = prev.map((s) => {
+            if (s.id === sessionId) {
+              return { ...s, status: "completed" };
+            }
+            if (nextSession && s.id === nextSession.id) {
+              return { ...s, status: "live", actualStart: now };
+            }
+            return s;
+          });
+          saveLocalSessions(eventId, updated);
+          return updated;
+        });
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+        return;
+      }
+
+      const batch = writeBatch(db);
+      batch.update(doc(db, "sessions", sessionId), { status: "completed" });
+      if (nextSession) {
+        batch.update(doc(db, "sessions", nextSession.id), {
+          status: "live",
+          actualStart: timestampVal,
+        });
+      }
+      await batch.commit();
+    },
+    [eventId, sessions]
+  );
+
+  // ─── Reorder sessions (reassigns order 1, 2, 3...) ───
+  const reorderSessions = useCallback(
+    async (orderedIds) => {
+      if (!Array.isArray(orderedIds) || orderedIds.length === 0) return;
+
+      if (!isFirebaseConfigured || !db) {
+        setSessions((prev) => {
+          const idOrderMap = new Map(orderedIds.map((id, index) => [id, index + 1]));
+          const updated = prev.map((s) =>
+            idOrderMap.has(s.id) ? { ...s, order: idOrderMap.get(s.id) } : s
+          );
+          updated.sort((a, b) => (a.order || 0) - (b.order || 0));
+          saveLocalSessions(eventId, updated);
+          return updated;
+        });
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+        return;
+      }
+
+      const batch = writeBatch(db);
+      orderedIds.forEach((id, index) => {
+        batch.update(doc(db, "sessions", id), { order: index + 1 });
+      });
+      await batch.commit();
+    },
+    [eventId]
+  );
+
+  return {
+    sessions,
+    loading,
+    error,
+    addSession,
+    updateSession,
+    deleteSession,
+    updateSessionsBatch,
+    startSession,
+    completeSession,
+    reorderSessions,
+  };
 }
 
 export function SessionsProvider({ children, eventId = DEMO_EVENT_ID }) {

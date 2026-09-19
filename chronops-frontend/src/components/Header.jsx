@@ -18,12 +18,30 @@ import { useNotifications } from "../hooks/useNotifications";
 import { useAuth } from "../hooks/useAuth";
 import Button from "./ui/Button";
 import TaskModal from "./TaskModal";
+import EditStageModal from "./EditStageModal";
+import { useSessions } from "../hooks/useSessions";
 
 export default function Header() {
   const { mode, setMode, goLive, searchQuery, setSearchQuery } = useApp();
   const { notifications, markAllRead, unreadCount } = useNotifications();
   const { user, signOutUser } = useAuth();
+  const { sessions, startSession } = useSessions();
   const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [stageModalOpen, setStageModalOpen] = useState(false);
+
+  const handleGoLive = async () => {
+    goLive();
+    const upcoming = sessions
+      .filter((s) => s.status === "upcoming")
+      .sort(
+        (a, b) =>
+          (a.order || 0) - (b.order || 0) ||
+          (a.startTime || "").localeCompare(b.startTime || "")
+      );
+    if (upcoming.length > 0) {
+      await startSession(upcoming[0].id);
+    }
+  };
 
   return (
     <>
@@ -47,6 +65,11 @@ export default function Header() {
               onClick={() => setMode("operations")}
             />
             <ModeTab
+              label="Task Board"
+              active={mode === "tasks"}
+              onClick={() => setMode("tasks")}
+            />
+            <ModeTab
               label="Live Stage"
               active={mode === "live"}
               onClick={() => setMode("live")}
@@ -57,9 +80,9 @@ export default function Header() {
           <Button
             variant="primary"
             size="sm"
-            onClick={goLive}
+            onClick={handleGoLive}
             className="hidden md:inline-flex ml-2 !h-9 !text-xs"
-            aria-label="Switch to Live Stage mode"
+            aria-label="Switch to Live Stage mode and start first upcoming session"
           >
             <Radio size={14} strokeWidth={3} />
             GO LIVE
@@ -88,6 +111,7 @@ export default function Header() {
           {/* ─── Add New ─── */}
           <Dropdown
             align="right"
+            ariaLabel="Add new item"
             trigger={
               <span className="inline-flex items-center justify-center w-9 h-9 bg-neo-secondary border-2 border-neo-ink shadow-[2px_2px_0_#000] text-neo-ink hover:shadow-neo-sm transition-all duration-100 ease-linear active:translate-x-[1px] active:translate-y-[1px] active:shadow-none">
                 <Plus size={18} strokeWidth={3} />
@@ -95,13 +119,14 @@ export default function Header() {
             }
             items={[
               { label: "New Task", icon: ListTodo, onClick: () => setTaskModalOpen(true) },
-              { label: "New Session", icon: CalendarPlus, onClick: () => {} },
+              { label: "New Session", icon: CalendarPlus, onClick: () => setStageModalOpen(true) },
             ]}
           />
 
           {/* ─── Notifications ─── */}
           <Dropdown
             align="right"
+            ariaLabel="Notifications"
             trigger={
               <span className="relative inline-flex items-center justify-center w-9 h-9 bg-neo-white border-2 border-neo-ink shadow-[2px_2px_0_#000] text-neo-ink hover:shadow-neo-sm transition-all duration-100 ease-linear active:translate-x-[1px] active:translate-y-[1px] active:shadow-none">
                 <Bell size={18} strokeWidth={3} />
@@ -180,6 +205,7 @@ export default function Header() {
           {/* ─── Avatar ─── */}
           <Dropdown
             align="right"
+            ariaLabel="User profile and menu"
             trigger={
               user?.photoURL ? (
                 <img
@@ -219,14 +245,19 @@ export default function Header() {
             onClick={() => setMode("operations")}
           />
           <MobileHeaderTab
+            label="Task Board"
+            active={mode === "tasks"}
+            onClick={() => setMode("tasks")}
+          />
+          <MobileHeaderTab
             label="Live Stage"
             active={mode === "live"}
             onClick={() => setMode("live")}
           />
           <button
-            onClick={goLive}
+            onClick={handleGoLive}
             className="flex-1 h-10 bg-neo-accent text-neo-ink font-bold text-xs uppercase tracking-wider border-0 cursor-pointer flex items-center justify-center gap-1"
-            aria-label="Switch to Live Stage mode"
+            aria-label="Switch to Live Stage mode and start first upcoming session"
           >
             <Radio size={12} strokeWidth={3} />
             GO LIVE
@@ -258,6 +289,12 @@ export default function Header() {
         open={taskModalOpen}
         onClose={() => setTaskModalOpen(false)}
         task={null}
+      />
+
+      {/* Stage modal for "Add New > New Session" */}
+      <EditStageModal
+        open={stageModalOpen}
+        onClose={() => setStageModalOpen(false)}
       />
     </>
   );

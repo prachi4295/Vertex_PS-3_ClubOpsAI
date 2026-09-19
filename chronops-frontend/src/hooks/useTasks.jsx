@@ -8,6 +8,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  writeBatch,
   Timestamp,
 } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../services/firebase";
@@ -16,11 +17,12 @@ import {
   SEED_TASKS,
   LOCAL_TASKS_KEY,
 } from "../data/seed";
+import { AI_SUMMIT_TASKS, CLUB_ORIENTATION_TASKS } from "../data/multiEvents";
 
 const TasksContext = createContext(null);
 
 /**
- * Loads tasks from localStorage or falls back to SEED_TASKS.
+ * Loads tasks from localStorage or falls back to SEED_TASKS or event presets.
  */
 function getLocalTasks(eventId) {
   try {
@@ -37,6 +39,14 @@ function getLocalTasks(eventId) {
   } catch (e) {
     console.warn("Failed to load local tasks:", e);
   }
+
+  if (eventId === "ai-summit-2026") {
+    return AI_SUMMIT_TASKS.map((t) => ({ ...t }));
+  }
+  if (eventId === "club-orientation-2026") {
+    return CLUB_ORIENTATION_TASKS.map((t) => ({ ...t }));
+  }
+
   return SEED_TASKS.map((t, i) => ({
     ...t,
     id: t.id || `task-${i + 1}`,
@@ -261,7 +271,166 @@ export function useEventTasks(eventId = DEMO_EVENT_ID) {
     [eventId]
   );
 
-  return { tasks, loading, error, addTask, updateTask, deleteTask, moveTask };
+  // ─── Add multiple tasks in a batch ───
+  const addTasksBatch = useCallback(
+    async (tasksArray) => {
+      const now = new Date();
+      const prepared = tasksArray.map((t, idx) => ({
+        eventId,
+        title: t.title,
+        status: t.status || "backlog",
+        assignee: t.assignee || "",
+        priority: t.priority || "medium",
+        dueDate: t.dueDate
+          ? (t.dueDate instanceof Date
+              ? Timestamp.fromDate(t.dueDate)
+              : Timestamp.fromDate(new Date(t.dueDate)))
+          : null,
+        source: t.source || "ai",
+        createdAt: Timestamp.fromDate(new Date(now.getTime() + idx * 50)),
+        updatedAt: Timestamp.fromDate(now),
+      }));
+
+      if (!isFirebaseConfigured || !db) {
+        const localCreated = prepared.map((t, i) => ({
+          ...t,
+          id: `task-ai-${Date.now()}-${i}`,
+          dueDate: t.dueDate ? (t.dueDate.toDate ? t.dueDate.toDate() : new Date(t.dueDate)) : null,
+          createdAt: t.createdAt.toDate ? t.createdAt.toDate() : new Date(),
+          updatedAt: t.updatedAt.toDate ? t.updatedAt.toDate() : new Date(),
+        }));
+        setTasks((prev) => {
+          const updated = [...prev, ...localCreated];
+          saveLocalTasks(eventId, updated);
+          return updated;
+        });
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+        return localCreated;
+      }
+
+      const batch = writeBatch(db);
+      const created = [];
+      prepared.forEach((t) => {
+        const docRef = doc(collection(db, "tasks"));
+        batch.set(docRef, t);
+        created.push({ id: docRef.id, ...t });
+      });
+      await batch.commit();
+      return created;
+    },
+    [eventId]
+  );
+
+  // ─── Delete multiple tasks in a batch ───
+  const deleteTasksBatch = useCallback(
+    async (taskIds) => {
+      if (!Array.isArray(taskIds) || taskIds.length === 0) return;
+
+      if (!isFirebaseConfigured || !db) {
+        setTasks((prev) => {
+          const updated = prev.filter((t) => !taskIds.includes(t.id));
+          saveLocalTasks(eventId, updated);
+          return updated;
+        });
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+        return;
+      }
+
+      const batch = writeBatch(db);
+      taskIds.forEach((id) => {
+        batch.delete(doc(db, "tasks", id));
+      });
+      await batch.commit();
+    },
+    [eventId]
+  );
+
+  return {
+    tasks,
+    loading,
+    error,
+    addTask,
+    updateTask,
+    deleteTask,
+    moveTask,
+    addTasksBatch,
+    deleteTasksBatch,
+  };
+}
+
+/**
+ * Provider for app-wide tasks context.
+ */
+/**
+ * Standalone helper to write a batch of tasks to any specific eventId.
+ */
+export async function addTasksBatchToEvent(eventId, tasksArray) {
+  const now = new Date();
+  const prepared = tasksArray.map((t, idx) => ({
+    eventId,
+    title: t.title,
+    status: t.status || "backlog",
+    assignee: t.assignee || "",
+    priority: t.priority || "medium",
+    dueDate: t.dueDate
+      ? (t.dueDate instanceof Date
+          ? Timestamp.fromDate(t.dueDate)
+          : Timestamp.fromDate(new Date(t.dueDate)))
+      : null,
+    source: t.source || "ai",
+    createdAt: Timestamp.fromDate(new Date(now.getTime() + idx * 50)),
+    updatedAt: Timestamp.fromDate(now),
+  }));
+
+  if (!isFirebaseConfigured || !db) {
+    const localCreated = prepared.map((t, i) => ({
+      ...t,
+      id: `task-ai-${Date.now()}-${i}`,
+      dueDate: t.dueDate ? (t.dueDate.toDate ? t.dueDate.toDate() : new Date(t.dueDate)) : null,
+      createdAt: t.createdAt.toDate ? t.createdAt.toDate() : new Date(),
+      updatedAt: t.updatedAt.toDate ? t.updatedAt.toDate() : new Date(),
+    }));
+    const current = getLocalTasks(eventId);
+    const updated = [...current, ...localCreated];
+    saveLocalTasks(eventId, updated);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+    }
+    return localCreated;
+  }
+
+  const batch = writeBatch(db);
+  const created = [];
+  prepared.forEach((t) => {
+    const docRef = doc(collection(db, "tasks"));
+    batch.set(docRef, t);
+    created.push({ id: docRef.id, ...t });
+  });
+  await batch.commit();
+  return created;
+}
+
+/**
+ * Standalone helper to delete a batch of tasks from any specific eventId.
+ */
+export async function deleteTasksBatchFromEvent(eventId, taskIds) {
+  if (!Array.isArray(taskIds) || taskIds.length === 0) return;
+
+  if (!isFirebaseConfigured || !db) {
+    const current = getLocalTasks(eventId);
+    const updated = current.filter((t) => !taskIds.includes(t.id));
+    saveLocalTasks(eventId, updated);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+    }
+    return;
+  }
+
+  const batch = writeBatch(db);
+  taskIds.forEach((id) => {
+    batch.delete(doc(db, "tasks", id));
+  });
+  await batch.commit();
 }
 
 /**

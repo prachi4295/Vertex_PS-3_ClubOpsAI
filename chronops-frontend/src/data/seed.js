@@ -387,52 +387,64 @@ export async function seedDemoData(ownerId = "demo-lead-uid") {
     try {
       console.info("Seeding demo data into Firestore for event:", DEMO_EVENT_ID);
 
-      // 1. Set event doc
-      await setDoc(doc(db, "events", DEMO_EVENT_ID), eventData);
+      const withTimeout = (promise, ms = 800) =>
+        Promise.race([
+          promise,
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Firestore operation timed out")), ms)
+          ),
+        ]);
 
-      // 2. Delete existing tasks for this event
-      const taskSnap = await getDocs(
-        query(collection(db, "tasks"), where("eventId", "==", DEMO_EVENT_ID))
+      await withTimeout(
+        (async () => {
+          // 1. Set event doc
+          await setDoc(doc(db, "events", DEMO_EVENT_ID), eventData);
+
+          // 2. Delete existing tasks for this event
+          const taskSnap = await getDocs(
+            query(collection(db, "tasks"), where("eventId", "==", DEMO_EVENT_ID))
+          );
+          const batch1 = writeBatch(db);
+          taskSnap.docs.forEach((d) => batch1.delete(d.ref));
+          await batch1.commit();
+
+          // 3. Batch write 12 tasks
+          const batch2 = writeBatch(db);
+          SEED_TASKS.forEach((task) => {
+            const taskRef = doc(collection(db, "tasks"));
+            batch2.set(taskRef, {
+              ...task,
+              id: taskRef.id,
+              eventId: DEMO_EVENT_ID,
+            });
+          });
+          await batch2.commit();
+
+          // 4. Delete existing sessions for this event
+          const sessionSnap = await getDocs(
+            query(collection(db, "sessions"), where("eventId", "==", DEMO_EVENT_ID))
+          );
+          const batch3 = writeBatch(db);
+          sessionSnap.docs.forEach((d) => batch3.delete(d.ref));
+          await batch3.commit();
+
+          // 5. Batch write 10 sessions
+          const batch4 = writeBatch(db);
+          SEED_SESSIONS.forEach((session) => {
+            const sessionRef = doc(collection(db, "sessions"));
+            batch4.set(sessionRef, {
+              ...session,
+              id: sessionRef.id,
+              eventId: DEMO_EVENT_ID,
+            });
+          });
+          await batch4.commit();
+        })()
       );
-      const batch1 = writeBatch(db);
-      taskSnap.docs.forEach((d) => batch1.delete(d.ref));
-      await batch1.commit();
-
-      // 3. Batch write 12 tasks
-      const batch2 = writeBatch(db);
-      SEED_TASKS.forEach((task) => {
-        const taskRef = doc(collection(db, "tasks"));
-        batch2.set(taskRef, {
-          ...task,
-          id: taskRef.id,
-          eventId: DEMO_EVENT_ID,
-        });
-      });
-      await batch2.commit();
-
-      // 4. Delete existing sessions for this event
-      const sessionSnap = await getDocs(
-        query(collection(db, "sessions"), where("eventId", "==", DEMO_EVENT_ID))
-      );
-      const batch3 = writeBatch(db);
-      sessionSnap.docs.forEach((d) => batch3.delete(d.ref));
-      await batch3.commit();
-
-      // 5. Batch write 10 sessions
-      const batch4 = writeBatch(db);
-      SEED_SESSIONS.forEach((session) => {
-        const sessionRef = doc(collection(db, "sessions"));
-        batch4.set(sessionRef, {
-          ...session,
-          id: sessionRef.id,
-          eventId: DEMO_EVENT_ID,
-        });
-      });
-      await batch4.commit();
 
       console.info("Firestore seed complete.");
     } catch (err) {
-      console.warn("Firestore seed failed, falling back to local storage:", err);
+      console.warn("Firestore seed unavailable or failed, falling back to local storage:", err);
       seedToLocalStorage(effectiveOwner);
     }
   } else {

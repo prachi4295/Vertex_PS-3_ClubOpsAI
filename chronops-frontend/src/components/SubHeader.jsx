@@ -3,10 +3,15 @@ import { Plus, Edit3, Star } from "lucide-react";
 import { Badge, Modal } from "./ui";
 import Button from "./ui/Button";
 import TaskModal from "./TaskModal";
+import EditStageModal from "./EditStageModal";
+import { useApp } from "../hooks/useApp";
 
 export default function SubHeader() {
+  const { mode } = useApp();
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [editStageOpen, setEditStageOpen] = useState(false);
+
+  const title = mode === "tasks" ? "Task Board" : "Event Operations";
 
   return (
     <>
@@ -21,7 +26,7 @@ export default function SubHeader() {
           <h1
             className="text-2xl sm:text-3xl font-black tracking-tight text-neo-ink rotate-[-1deg] inline-block"
           >
-            Dashboard
+            {title}
           </h1>
           <Badge color="secondary" rotate className="hidden sm:inline-flex">
             HackGenesis 2026
@@ -59,21 +64,11 @@ export default function SubHeader() {
         task={null}
       />
 
-      <Modal
+      {/* Real Edit Stage Modal */}
+      <EditStageModal
         open={editStageOpen}
         onClose={() => setEditStageOpen(false)}
-        title="Edit Stage"
-      >
-        <div className="text-center py-8">
-          <div className="w-16 h-16 mx-auto bg-neo-muted border-4 border-neo-ink flex items-center justify-center mb-4">
-            <Edit3 size={32} strokeWidth={3} />
-          </div>
-          <p className="font-bold text-lg mb-2">Stage Editor</p>
-          <p className="font-bold text-sm text-neo-ink/50">
-            Configure your event stage layout. Coming soon.
-          </p>
-        </div>
-      </Modal>
+      />
     </>
   );
 }

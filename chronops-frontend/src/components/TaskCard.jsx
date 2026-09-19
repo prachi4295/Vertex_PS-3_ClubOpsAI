@@ -108,11 +108,14 @@ export default function TaskCard({ task, onEdit, onMove }) {
         {task.dueDate && (
           <span
             className={[
-              "inline-flex items-center gap-0.5 font-bold text-[10px] uppercase tracking-wider",
-              isOverdue ? "text-neo-accent" : "text-neo-ink/50",
+              "inline-flex items-center gap-1 font-bold text-[10px] uppercase tracking-wider",
+              isOverdue
+                ? "bg-neo-accent text-neo-white px-1.5 py-0.5 border border-neo-ink shadow-[1px_1px_0_#000]"
+                : "text-neo-ink/60",
             ].join(" ")}
           >
             <Calendar size={10} strokeWidth={3} />
+            {isOverdue ? "OVERDUE • " : ""}
             {new Date(task.dueDate).toLocaleDateString("en-IN", {
               day: "numeric",
               month: "short",
@@ -122,20 +125,22 @@ export default function TaskCard({ task, onEdit, onMove }) {
       </div>
 
       {/* Move buttons (keyboard/touch fallback) */}
-      <div className="flex items-center gap-1 mt-2 ml-5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-100">
+      <div className="flex items-center gap-1 mt-2.5 ml-5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity duration-100">
         <button
+          type="button"
           onClick={() => canMoveLeft && onMove?.(task.id, STATUS_ORDER[statusIdx - 1])}
           disabled={!canMoveLeft}
-          aria-label="Move task left"
-          className="w-7 h-7 flex items-center justify-center border-2 border-neo-ink bg-neo-white text-neo-ink cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed hover:bg-neo-secondary transition-colors duration-100"
+          aria-label="Move task to previous column"
+          className="w-7 h-7 flex items-center justify-center border-2 border-neo-ink bg-neo-white text-neo-ink cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed hover:bg-neo-secondary transition-colors duration-100 active:translate-x-[1px] active:translate-y-[1px]"
         >
           <ChevronLeft size={14} strokeWidth={3} />
         </button>
         <button
+          type="button"
           onClick={() => canMoveRight && onMove?.(task.id, STATUS_ORDER[statusIdx + 1])}
           disabled={!canMoveRight}
-          aria-label="Move task right"
-          className="w-7 h-7 flex items-center justify-center border-2 border-neo-ink bg-neo-white text-neo-ink cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed hover:bg-neo-secondary transition-colors duration-100"
+          aria-label="Move task to next column"
+          className="w-7 h-7 flex items-center justify-center border-2 border-neo-ink bg-neo-white text-neo-ink cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed hover:bg-neo-secondary transition-colors duration-100 active:translate-x-[1px] active:translate-y-[1px]"
         >
           <ChevronRight size={14} strokeWidth={3} />
         </button>

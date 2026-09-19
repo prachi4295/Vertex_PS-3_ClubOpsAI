@@ -6,11 +6,12 @@ const AppContext = createContext(null);
  * App-level state: current mode and global search string.
  */
 export function AppProvider({ children }) {
-  const [mode, setMode] = useState("operations"); // "operations" | "live"
+  const [mode, setMode] = useState("operations"); // "operations" | "tasks" | "live"
   const [searchQuery, setSearchQuery] = useState("");
 
   const goLive = useCallback(() => setMode("live"), []);
   const goOperations = useCallback(() => setMode("operations"), []);
+  const goTasks = useCallback(() => setMode("tasks"), []);
 
   return (
     <AppContext.Provider
@@ -19,6 +20,7 @@ export function AppProvider({ children }) {
         setMode,
         goLive,
         goOperations,
+        goTasks,
         searchQuery,
         setSearchQuery,
       }}

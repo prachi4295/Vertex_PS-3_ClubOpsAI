@@ -15,8 +15,8 @@ const STATUS_OPTIONS = [
 /**
  * Add / Edit / Delete task modal with validation.
  */
-export default function TaskModal({ open, onClose, task = null }) {
-  const { addTask, updateTask, deleteTask } = useTasks();
+export default function TaskModal({ open, onClose, task = null, eventId }) {
+  const { addTask, updateTask, deleteTask } = useTasks(eventId || task?.eventId);
   const isEdit = !!task;
 
   const [form, setForm] = useState({

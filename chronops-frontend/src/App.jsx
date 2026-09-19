@@ -4,9 +4,12 @@ import { AppProvider } from "./hooks/useApp";
 import { NotificationsProvider } from "./hooks/useNotifications";
 import { TasksProvider } from "./hooks/useTasks";
 import { SessionsProvider } from "./hooks/useSessions";
+import { ClockProvider } from "./hooks/useClock";
 import Dashboard from "./pages/Dashboard";
+import EventTaskboardPage from "./pages/EventTaskboardPage";
 import Login from "./pages/Login";
 import StyleGuide from "./pages/StyleGuide";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { Star } from "lucide-react";
 
 /**
@@ -53,28 +56,40 @@ function PublicLoginRoute() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppProvider>
-        <NotificationsProvider>
-          <TasksProvider>
-            <SessionsProvider>
-              <Routes>
-                <Route
-                  path="/"
-                  element={
-                    <ProtectedRoute>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route path="/login" element={<PublicLoginRoute />} />
-                <Route path="/styleguide" element={<StyleGuide />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </SessionsProvider>
-          </TasksProvider>
-        </NotificationsProvider>
-      </AppProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppProvider>
+          <NotificationsProvider>
+            <TasksProvider>
+              <SessionsProvider>
+                <ClockProvider>
+                  <Routes>
+                    <Route
+                      path="/"
+                      element={
+                        <ProtectedRoute>
+                          <Dashboard />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/taskboards/:eventId"
+                      element={
+                        <ProtectedRoute>
+                          <EventTaskboardPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route path="/login" element={<PublicLoginRoute />} />
+                    {import.meta.env.DEV && <Route path="/styleguide" element={<StyleGuide />} />}
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </ClockProvider>
+              </SessionsProvider>
+            </TasksProvider>
+          </NotificationsProvider>
+        </AppProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
