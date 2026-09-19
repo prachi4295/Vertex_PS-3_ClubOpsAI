@@ -68,4 +68,50 @@ describe("Kanban Board Configuration and Mechanics", () => {
 
     expect(completedIsOverdue).toBe(false);
   });
+
+  it("evaluates task timing (dueTime) accurately for overdue status", () => {
+    // Current time: 2026-09-19 at 15:00
+    const now = new Date("2026-09-19T15:00:00");
+
+    function checkOverdue(task, currentTime) {
+      if (!task.dueDate || task.status === "done") return false;
+      const due = new Date(task.dueDate);
+      if (task.dueTime) {
+        const [h, m] = task.dueTime.split(":").map(Number);
+        if (!isNaN(h) && !isNaN(m)) {
+          due.setHours(h, m, 0, 0);
+        } else {
+          due.setHours(23, 59, 59, 999);
+        }
+      } else {
+        due.setHours(23, 59, 59, 999);
+      }
+      return due < currentTime;
+    }
+
+    // Task due earlier today at 11:00 AM -> OVERDUE
+    const taskPast = {
+      dueDate: "2026-09-19",
+      dueTime: "11:00",
+      status: "todo",
+    };
+    expect(checkOverdue(taskPast, now)).toBe(true);
+
+    // Task due later today at 18:00 (6:00 PM) -> NOT OVERDUE
+    const taskFuture = {
+      dueDate: "2026-09-19",
+      dueTime: "18:00",
+      status: "todo",
+    };
+    expect(checkOverdue(taskFuture, now)).toBe(false);
+
+    // Task due earlier today but already done -> NOT OVERDUE
+    const taskDone = {
+      dueDate: "2026-09-19",
+      dueTime: "11:00",
+      status: "done",
+    };
+    expect(checkOverdue(taskDone, now)).toBe(false);
+  });
 });
+

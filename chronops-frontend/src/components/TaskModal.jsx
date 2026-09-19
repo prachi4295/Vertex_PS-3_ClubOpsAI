@@ -25,6 +25,7 @@ export default function TaskModal({ open, onClose, task = null, eventId }) {
     priority: "medium",
     status: "backlog",
     dueDate: "",
+    dueTime: "",
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -39,8 +40,11 @@ export default function TaskModal({ open, onClose, task = null, eventId }) {
         priority: task.priority || "medium",
         status: task.status || "backlog",
         dueDate: task.dueDate
-          ? new Date(task.dueDate).toISOString().split("T")[0]
+          ? (task.dueDate instanceof Date
+              ? task.dueDate.toISOString().split("T")[0]
+              : String(task.dueDate).split("T")[0])
           : "",
+        dueTime: task.dueTime || "",
       });
     } else {
       setForm({
@@ -49,6 +53,7 @@ export default function TaskModal({ open, onClose, task = null, eventId }) {
         priority: "medium",
         status: "backlog",
         dueDate: "",
+        dueTime: "",
       });
     }
     setErrors({});
@@ -76,6 +81,7 @@ export default function TaskModal({ open, onClose, task = null, eventId }) {
           priority: form.priority,
           status: form.status,
           dueDate: form.dueDate || null,
+          dueTime: form.dueTime || null,
         });
       } else {
         await addTask({
@@ -84,6 +90,7 @@ export default function TaskModal({ open, onClose, task = null, eventId }) {
           priority: form.priority,
           status: form.status,
           dueDate: form.dueDate || null,
+          dueTime: form.dueTime || null,
           source: "manual",
         });
       }
@@ -213,20 +220,37 @@ export default function TaskModal({ open, onClose, task = null, eventId }) {
           </div>
         </div>
 
-        {/* Due date */}
-        <div>
-          <label
-            htmlFor="task-due"
-            className="block font-bold text-xs uppercase tracking-wider mb-1"
-          >
-            Due Date
-          </label>
-          <Input
-            id="task-due"
-            type="date"
-            value={form.dueDate}
-            onChange={(e) => setField("dueDate", e.target.value)}
-          />
+        {/* Due date & Timing */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label
+              htmlFor="task-due"
+              className="block font-bold text-xs uppercase tracking-wider mb-1"
+            >
+              Due Date
+            </label>
+            <Input
+              id="task-due"
+              type="date"
+              value={form.dueDate}
+              onChange={(e) => setField("dueDate", e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="task-time"
+              className="block font-bold text-xs uppercase tracking-wider mb-1"
+            >
+              Timing (Due Time)
+            </label>
+            <Input
+              id="task-time"
+              type="time"
+              value={form.dueTime}
+              onChange={(e) => setField("dueTime", e.target.value)}
+            />
+          </div>
         </div>
 
         {/* Error */}

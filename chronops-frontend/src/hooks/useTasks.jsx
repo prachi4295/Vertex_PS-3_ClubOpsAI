@@ -73,13 +73,30 @@ function saveLocalTasks(eventId, tasks) {
   }
 }
 
+const withTimeout = (promise, ms = 1800) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Firestore operation timed out")), ms)
+    ),
+  ]);
+
 /**
  * Core hook that manages tasks for a specific eventId via onSnapshot.
  * Sorts client-side without combining where() and orderBy().
  */
 export function useEventTasks(eventId = DEMO_EVENT_ID) {
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState(() => {
+    if (!eventId) return [];
+    const localData = getLocalTasks(eventId);
+    localData.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    return localData;
+  });
+  const [loading, setLoading] = useState(() => {
+    if (!eventId) return false;
+    const localData = getLocalTasks(eventId);
+    return localData.length === 0;
+  });
   const [error, setError] = useState(null);
 
   // Sync state loader
@@ -99,19 +116,25 @@ export function useEventTasks(eventId = DEMO_EVENT_ID) {
     }
 
     if (isFirebaseConfigured && db) {
-      setLoading(true);
+      // Set a fallback timer so loading never hangs if Firestore is unreachable
+      const timer = setTimeout(() => {
+        setLoading(false);
+      }, 1500);
+
       // Query by eventId only — per spec: do not combine where() with orderBy()
       const q = query(collection(db, "tasks"), where("eventId", "==", eventId));
 
       const unsub = onSnapshot(
         q,
         (snap) => {
+          clearTimeout(timer);
           const docs = snap.docs.map((d) => {
             const data = d.data();
             return {
               id: d.id,
               ...data,
               dueDate: data.dueDate?.toDate?.() ?? (data.dueDate ? new Date(data.dueDate) : null),
+              dueTime: data.dueTime || null,
               createdAt: data.createdAt?.toDate?.() ?? (data.createdAt ? new Date(data.createdAt) : new Date()),
               updatedAt: data.updatedAt?.toDate?.() ?? (data.updatedAt ? new Date(data.updatedAt) : new Date()),
             };
@@ -124,13 +147,17 @@ export function useEventTasks(eventId = DEMO_EVENT_ID) {
           setError(null);
         },
         (err) => {
-          console.error("Firestore tasks error:", err);
-          setError(err.message);
+          clearTimeout(timer);
+          console.warn("Firestore tasks error, falling back to local storage:", err);
+          setError(null);
           reloadFromLocal();
         }
       );
 
-      return () => unsub();
+      return () => {
+        clearTimeout(timer);
+        unsub();
+      };
     } else {
       // Local demo mode
       reloadFromLocal();
@@ -154,30 +181,42 @@ export function useEventTasks(eventId = DEMO_EVENT_ID) {
         assignee: taskData.assignee || "",
         priority: taskData.priority || "medium",
         dueDate: taskData.dueDate ? Timestamp.fromDate(new Date(taskData.dueDate)) : null,
+        dueTime: taskData.dueTime || null,
         source: taskData.source || "manual",
         createdAt: Timestamp.fromDate(now),
         updatedAt: Timestamp.fromDate(now),
       };
 
-      if (!isFirebaseConfigured || !db) {
-        const localItem = {
-          ...newTask,
-          id: `task-${Date.now()}`,
-          dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
-          createdAt: now,
-          updatedAt: now,
-        };
-        setTasks((prev) => {
-          const updated = [...prev, localItem];
-          saveLocalTasks(eventId, updated);
-          return updated;
-        });
+      // Always commit to local state immediately so UI updates instantly
+      const localItem = {
+        ...newTask,
+        id: taskData.id || `task-${Date.now()}`,
+        dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
+        dueTime: taskData.dueTime || null,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      setTasks((prev) => {
+        const updated = [...prev, localItem];
+        saveLocalTasks(eventId, updated);
+        return updated;
+      });
+      if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      if (!isFirebaseConfigured || !db) {
         return localItem;
       }
 
-      const docRef = await addDoc(collection(db, "tasks"), newTask);
-      return { id: docRef.id, ...newTask };
+      try {
+        const docRef = await withTimeout(addDoc(collection(db, "tasks"), newTask), 1800);
+        return { id: docRef.id, ...newTask };
+      } catch (err) {
+        console.warn("Firestore addTask sync timed out or failed, persisted locally:", err);
+        return localItem;
+      }
     },
     [eventId]
   );
@@ -195,29 +234,41 @@ export function useEventTasks(eventId = DEMO_EVENT_ID) {
           ? Timestamp.fromDate(new Date(updates.dueDate))
           : null;
       }
+      if (updates.dueTime !== undefined) {
+        firestoreUpdates.dueTime = updates.dueTime || null;
+      }
+
+      // Always update local state immediately
+      setTasks((prev) => {
+        const updated = prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                ...updates,
+                dueDate: updates.dueDate !== undefined
+                  ? (updates.dueDate ? new Date(updates.dueDate) : null)
+                  : t.dueDate,
+                dueTime: updates.dueTime !== undefined ? (updates.dueTime || null) : t.dueTime,
+                updatedAt: now,
+              }
+            : t
+        );
+        saveLocalTasks(eventId, updated);
+        return updated;
+      });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
 
       if (!isFirebaseConfigured || !db) {
-        setTasks((prev) => {
-          const updated = prev.map((t) =>
-            t.id === taskId
-              ? {
-                  ...t,
-                  ...updates,
-                  dueDate: updates.dueDate !== undefined
-                    ? (updates.dueDate ? new Date(updates.dueDate) : null)
-                    : t.dueDate,
-                  updatedAt: now,
-                }
-              : t
-          );
-          saveLocalTasks(eventId, updated);
-          return updated;
-        });
-        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
         return;
       }
 
-      await updateDoc(doc(db, "tasks", taskId), firestoreUpdates);
+      try {
+        await withTimeout(updateDoc(doc(db, "tasks", taskId), firestoreUpdates), 1800);
+      } catch (err) {
+        console.warn("Firestore updateTask sync timed out or failed, kept local:", err);
+      }
     },
     [eventId]
   );
@@ -225,17 +276,24 @@ export function useEventTasks(eventId = DEMO_EVENT_ID) {
   // ─── Delete task ───
   const deleteTask = useCallback(
     async (taskId) => {
-      if (!isFirebaseConfigured || !db) {
-        setTasks((prev) => {
-          const updated = prev.filter((t) => t.id !== taskId);
-          saveLocalTasks(eventId, updated);
-          return updated;
-        });
+      setTasks((prev) => {
+        const updated = prev.filter((t) => t.id !== taskId);
+        saveLocalTasks(eventId, updated);
+        return updated;
+      });
+      if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      if (!isFirebaseConfigured || !db) {
         return;
       }
 
-      await deleteDoc(doc(db, "tasks", taskId));
+      try {
+        await withTimeout(deleteDoc(doc(db, "tasks", taskId)), 1800);
+      } catch (err) {
+        console.warn("Firestore deleteTask sync timed out or failed, removed locally:", err);
+      }
     },
     [eventId]
   );
@@ -248,24 +306,28 @@ export function useEventTasks(eventId = DEMO_EVENT_ID) {
         const updated = prev.map((t) =>
           t.id === taskId ? { ...t, status: newStatus, updatedAt: now } : t
         );
-        if (!isFirebaseConfigured || !db) {
-          saveLocalTasks(eventId, updated);
-        }
+        saveLocalTasks(eventId, updated);
         return updated;
       });
 
-      if (!isFirebaseConfigured || !db) {
+      if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      if (!isFirebaseConfigured || !db) {
         return;
       }
 
       try {
-        await updateDoc(doc(db, "tasks", taskId), {
-          status: newStatus,
-          updatedAt: Timestamp.fromDate(now),
-        });
+        await withTimeout(
+          updateDoc(doc(db, "tasks", taskId), {
+            status: newStatus,
+            updatedAt: Timestamp.fromDate(now),
+          }),
+          1800
+        );
       } catch (err) {
-        console.error("Failed to persist task move:", err);
+        console.warn("Firestore moveTask sync timed out or failed, kept local:", err);
       }
     },
     [eventId]
@@ -286,37 +348,45 @@ export function useEventTasks(eventId = DEMO_EVENT_ID) {
               ? Timestamp.fromDate(t.dueDate)
               : Timestamp.fromDate(new Date(t.dueDate)))
           : null,
+        dueTime: t.dueTime || null,
         source: t.source || "ai",
         createdAt: Timestamp.fromDate(new Date(now.getTime() + idx * 50)),
         updatedAt: Timestamp.fromDate(now),
       }));
 
-      if (!isFirebaseConfigured || !db) {
-        const localCreated = prepared.map((t, i) => ({
-          ...t,
-          id: `task-ai-${Date.now()}-${i}`,
-          dueDate: t.dueDate ? (t.dueDate.toDate ? t.dueDate.toDate() : new Date(t.dueDate)) : null,
-          createdAt: t.createdAt.toDate ? t.createdAt.toDate() : new Date(),
-          updatedAt: t.updatedAt.toDate ? t.updatedAt.toDate() : new Date(),
-        }));
-        setTasks((prev) => {
-          const updated = [...prev, ...localCreated];
-          saveLocalTasks(eventId, updated);
-          return updated;
-        });
+      const localCreated = prepared.map((t, i) => ({
+        ...t,
+        id: t.id || `task-ai-${Date.now()}-${i}`,
+        dueDate: t.dueDate ? (t.dueDate.toDate ? t.dueDate.toDate() : new Date(t.dueDate)) : null,
+        dueTime: t.dueTime || null,
+        createdAt: t.createdAt.toDate ? t.createdAt.toDate() : new Date(),
+        updatedAt: t.updatedAt.toDate ? t.updatedAt.toDate() : new Date(),
+      }));
+
+      setTasks((prev) => {
+        const updated = [...prev, ...localCreated];
+        saveLocalTasks(eventId, updated);
+        return updated;
+      });
+      if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      if (!isFirebaseConfigured || !db) {
         return localCreated;
       }
 
-      const batch = writeBatch(db);
-      const created = [];
-      prepared.forEach((t) => {
-        const docRef = doc(collection(db, "tasks"));
-        batch.set(docRef, t);
-        created.push({ id: docRef.id, ...t });
-      });
-      await batch.commit();
-      return created;
+      try {
+        const batch = writeBatch(db);
+        prepared.forEach((t) => {
+          const docRef = doc(collection(db, "tasks"));
+          batch.set(docRef, t);
+        });
+        await withTimeout(batch.commit(), 1800);
+      } catch (err) {
+        console.warn("Firestore addTasksBatch sync timed out or failed, kept local:", err);
+      }
+      return localCreated;
     },
     [eventId]
   );
@@ -326,21 +396,28 @@ export function useEventTasks(eventId = DEMO_EVENT_ID) {
     async (taskIds) => {
       if (!Array.isArray(taskIds) || taskIds.length === 0) return;
 
-      if (!isFirebaseConfigured || !db) {
-        setTasks((prev) => {
-          const updated = prev.filter((t) => !taskIds.includes(t.id));
-          saveLocalTasks(eventId, updated);
-          return updated;
-        });
+      setTasks((prev) => {
+        const updated = prev.filter((t) => !taskIds.includes(t.id));
+        saveLocalTasks(eventId, updated);
+        return updated;
+      });
+      if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      if (!isFirebaseConfigured || !db) {
         return;
       }
 
-      const batch = writeBatch(db);
-      taskIds.forEach((id) => {
-        batch.delete(doc(db, "tasks", id));
-      });
-      await batch.commit();
+      try {
+        const batch = writeBatch(db);
+        taskIds.forEach((id) => {
+          batch.delete(doc(db, "tasks", id));
+        });
+        await withTimeout(batch.commit(), 1800);
+      } catch (err) {
+        console.warn("Firestore deleteTasksBatch sync timed out or failed, kept local:", err);
+      }
     },
     [eventId]
   );
@@ -359,9 +436,6 @@ export function useEventTasks(eventId = DEMO_EVENT_ID) {
 }
 
 /**
- * Provider for app-wide tasks context.
- */
-/**
  * Standalone helper to write a batch of tasks to any specific eventId.
  */
 export async function addTasksBatchToEvent(eventId, tasksArray) {
@@ -377,37 +451,43 @@ export async function addTasksBatchToEvent(eventId, tasksArray) {
           ? Timestamp.fromDate(t.dueDate)
           : Timestamp.fromDate(new Date(t.dueDate)))
       : null,
+    dueTime: t.dueTime || null,
     source: t.source || "ai",
     createdAt: Timestamp.fromDate(new Date(now.getTime() + idx * 50)),
     updatedAt: Timestamp.fromDate(now),
   }));
 
+  // Always commit locally first so data is instantly safe and accessible
+  const localCreated = prepared.map((t, i) => ({
+    ...t,
+    id: t.id || `task-ai-${Date.now()}-${i}`,
+    dueDate: t.dueDate ? (t.dueDate.toDate ? t.dueDate.toDate() : new Date(t.dueDate)) : null,
+    dueTime: t.dueTime || null,
+    createdAt: t.createdAt.toDate ? t.createdAt.toDate() : new Date(),
+    updatedAt: t.updatedAt.toDate ? t.updatedAt.toDate() : new Date(),
+  }));
+  const current = getLocalTasks(eventId);
+  const updated = [...current, ...localCreated];
+  saveLocalTasks(eventId, updated);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+  }
+
   if (!isFirebaseConfigured || !db) {
-    const localCreated = prepared.map((t, i) => ({
-      ...t,
-      id: `task-ai-${Date.now()}-${i}`,
-      dueDate: t.dueDate ? (t.dueDate.toDate ? t.dueDate.toDate() : new Date(t.dueDate)) : null,
-      createdAt: t.createdAt.toDate ? t.createdAt.toDate() : new Date(),
-      updatedAt: t.updatedAt.toDate ? t.updatedAt.toDate() : new Date(),
-    }));
-    const current = getLocalTasks(eventId);
-    const updated = [...current, ...localCreated];
-    saveLocalTasks(eventId, updated);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("clubops-data-updated"));
-    }
     return localCreated;
   }
 
-  const batch = writeBatch(db);
-  const created = [];
-  prepared.forEach((t) => {
-    const docRef = doc(collection(db, "tasks"));
-    batch.set(docRef, t);
-    created.push({ id: docRef.id, ...t });
-  });
-  await batch.commit();
-  return created;
+  try {
+    const batch = writeBatch(db);
+    prepared.forEach((t) => {
+      const docRef = doc(collection(db, "tasks"));
+      batch.set(docRef, t);
+    });
+    await withTimeout(batch.commit(), 1800);
+  } catch (err) {
+    console.warn("Firestore addTasksBatchToEvent sync timed out or failed, kept local:", err);
+  }
+  return localCreated;
 }
 
 /**
@@ -416,21 +496,26 @@ export async function addTasksBatchToEvent(eventId, tasksArray) {
 export async function deleteTasksBatchFromEvent(eventId, taskIds) {
   if (!Array.isArray(taskIds) || taskIds.length === 0) return;
 
+  const current = getLocalTasks(eventId);
+  const updated = current.filter((t) => !taskIds.includes(t.id));
+  saveLocalTasks(eventId, updated);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+  }
+
   if (!isFirebaseConfigured || !db) {
-    const current = getLocalTasks(eventId);
-    const updated = current.filter((t) => !taskIds.includes(t.id));
-    saveLocalTasks(eventId, updated);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("clubops-data-updated"));
-    }
     return;
   }
 
-  const batch = writeBatch(db);
-  taskIds.forEach((id) => {
-    batch.delete(doc(db, "tasks", id));
-  });
-  await batch.commit();
+  try {
+    const batch = writeBatch(db);
+    taskIds.forEach((id) => {
+      batch.delete(doc(db, "tasks", id));
+    });
+    await withTimeout(batch.commit(), 1800);
+  } catch (err) {
+    console.warn("Firestore deleteTasksBatchFromEvent sync timed out or failed, kept local:", err);
+  }
 }
 
 /**

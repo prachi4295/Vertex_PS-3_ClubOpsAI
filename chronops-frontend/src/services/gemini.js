@@ -163,6 +163,10 @@ export const TASK_EXTRACTION_SCHEMA = {
         type: Type.STRING,
         description: "Due date in YYYY-MM-DD format if mentioned, or empty string if none",
       },
+      dueTime: {
+        type: Type.STRING,
+        description: "Timing or time of day in 24-hour HH:MM format if mentioned (e.g., '14:30', '09:00'), or empty string if none",
+      },
       priority: {
         type: Type.STRING,
         enum: ["low", "medium", "high"],
@@ -175,11 +179,11 @@ export const TASK_EXTRACTION_SCHEMA = {
 
 /**
  * Schema validation for extracted tasks.
- * Ensures output is an array of { title, assignee, dueDate, priority }
+ * Ensures output is an array of { title, assignee, dueDate, dueTime, priority }
  * and filters out non-actionable or invalid objects.
  *
  * @param {any} data
- * @returns {Array<{ title: string, assignee: string, dueDate: string|null, priority: 'low'|'medium'|'high' }>}
+ * @returns {Array<{ title: string, assignee: string, dueDate: string|null, dueTime: string|null, priority: 'low'|'medium'|'high' }>}
  */
 export function validateExtractedTasks(data) {
   if (!Array.isArray(data)) return [];
@@ -211,12 +215,22 @@ export function validateExtractedTasks(data) {
         }
       }
 
+      let dueTime = null;
+      if (item.dueTime && typeof item.dueTime === "string") {
+        const timeClean = item.dueTime.trim();
+        if (/^\d{1,2}:\d{2}$/.test(timeClean)) {
+          const [h, m] = timeClean.split(":");
+          dueTime = `${h.padStart(2, "0")}:${m}`;
+        }
+      }
+
       const assignee = typeof item.assignee === "string" ? item.assignee.trim() : "";
 
       return {
         title: item.title.trim(),
         assignee,
         dueDate,
+        dueTime,
         priority,
       };
     });
@@ -289,6 +303,7 @@ export function fallbackExtractTasks(notes = "") {
       title: "Follow up with Red Bull sponsor for ice buckets and banners",
       assignee: "Priya",
       dueDate: "2026-09-20",
+      dueTime: "11:00",
       priority: "high",
     });
   }
@@ -297,6 +312,7 @@ export function fallbackExtractTasks(notes = "") {
       title: "Check HDMI splitters and wireless lav mics on Main Stage",
       assignee: "Rahul",
       dueDate: "2026-09-19",
+      dueTime: "08:30",
       priority: "high",
     });
   }
@@ -305,6 +321,7 @@ export function fallbackExtractTasks(notes = "") {
       title: "Print badges and sort volunteer lanyards",
       assignee: "Ananya",
       dueDate: "2026-09-20",
+      dueTime: "09:00",
       priority: "medium",
     });
   }
@@ -313,6 +330,7 @@ export function fallbackExtractTasks(notes = "") {
       title: "Confirm dietary count with South Indian catering vendor",
       assignee: "Kavita",
       dueDate: "2026-09-20",
+      dueTime: "12:30",
       priority: "medium",
     });
   }
@@ -329,6 +347,7 @@ export function fallbackExtractTasks(notes = "") {
         title: line.replace(/^[-*•\d.]+\s*/, "").slice(0, 80),
         assignee: "Unassigned",
         dueDate: "2026-09-20",
+        dueTime: "10:00",
         priority: "medium",
       });
     }
@@ -341,6 +360,7 @@ export function fallbackExtractTasks(notes = "") {
           title: "Review operational action items from meeting transcript",
           assignee: "Team Lead",
           dueDate: "2026-09-20",
+          dueTime: "17:00",
           priority: "high",
         },
       ];

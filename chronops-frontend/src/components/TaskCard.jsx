@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Bot,
   Calendar,
+  Clock,
 } from "lucide-react";
 import { Badge } from "./ui";
 
@@ -19,7 +20,7 @@ const PRIORITY_BADGE = {
 
 /**
  * A single draggable Kanban task card.
- * Shows title, assignee, priority badge, due date (red if overdue), "AI" badge.
+ * Shows title, assignee, priority badge, due date + timing (red if overdue), "AI" badge.
  * Move-left / move-right buttons for keyboard + touch.
  */
 export default function TaskCard({ task, onEdit, onMove }) {
@@ -42,10 +43,21 @@ export default function TaskCard({ task, onEdit, onMove }) {
   const canMoveLeft = statusIdx > 0;
   const canMoveRight = statusIdx < STATUS_ORDER.length - 1;
 
-  const isOverdue =
-    task.dueDate &&
-    new Date(task.dueDate) < new Date() &&
-    task.status !== "done";
+  const isOverdue = (() => {
+    if (!task.dueDate || task.status === "done") return false;
+    const due = new Date(task.dueDate);
+    if (task.dueTime) {
+      const [h, m] = task.dueTime.split(":").map(Number);
+      if (!isNaN(h) && !isNaN(m)) {
+        due.setHours(h, m, 0, 0);
+      } else {
+        due.setHours(23, 59, 59, 999);
+      }
+    } else {
+      due.setHours(23, 59, 59, 999);
+    }
+    return due < new Date();
+  })();
 
   const pb = PRIORITY_BADGE[task.priority] || PRIORITY_BADGE.medium;
 
@@ -105,7 +117,7 @@ export default function TaskCard({ task, onEdit, onMove }) {
           </span>
         )}
 
-        {task.dueDate && (
+        {(task.dueDate || task.dueTime) && (
           <span
             className={[
               "inline-flex items-center gap-1 font-bold text-[10px] uppercase tracking-wider",
@@ -114,12 +126,19 @@ export default function TaskCard({ task, onEdit, onMove }) {
                 : "text-neo-ink/60",
             ].join(" ")}
           >
-            <Calendar size={10} strokeWidth={3} />
+            {task.dueDate && <Calendar size={10} strokeWidth={3} />}
             {isOverdue ? "OVERDUE • " : ""}
-            {new Date(task.dueDate).toLocaleDateString("en-IN", {
-              day: "numeric",
-              month: "short",
-            })}
+            {task.dueDate &&
+              new Date(task.dueDate).toLocaleDateString("en-IN", {
+                day: "numeric",
+                month: "short",
+              })}
+            {task.dueTime && (
+              <span className="inline-flex items-center gap-0.5 ml-1">
+                <Clock size={10} strokeWidth={3} />
+                {task.dueTime}
+              </span>
+            )}
           </span>
         )}
       </div>

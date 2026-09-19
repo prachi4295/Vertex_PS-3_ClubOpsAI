@@ -129,6 +129,7 @@ export default function IntelligenceCard() {
   const [modalSelectedEventId, setModalSelectedEventId] = useState(
     events[0]?.id || "hackgenesis-2026"
   );
+  const [isCommitting, setIsCommitting] = useState(false);
 
   // Web Speech API state
   const [isRecording, setIsRecording] = useState(false);
@@ -237,47 +238,57 @@ export default function IntelligenceCard() {
 
   // Actually commit extracted tasks to a specific target event board
   const commitTasksToEventBoard = async (targetEventId, tasksToCreate) => {
-    const targetEvent =
-      events.find((e) => e.id === targetEventId) || {
-        name: "Event",
-        id: targetEventId,
-      };
+    setIsCommitting(true);
+    try {
+      const targetEvent =
+        events.find((e) => e.id === targetEventId) || {
+          name: "Event",
+          id: targetEventId,
+        };
 
-    const created = await addTasksBatchToEvent(targetEventId, tasksToCreate);
-    const createdIds = created.map((t) => t.id);
+      const created = await addTasksBatchToEvent(targetEventId, tasksToCreate);
+      const createdIds = created.map((t) => t.id);
 
-    // Add entry to notifications
-    addNotification({
-      type: "ai",
-      message: `AI extracted ${created.length} tasks into "${targetEvent.name}" Backlog`,
-    });
+      // Add entry to notifications
+      addNotification({
+        type: "ai",
+        message: `AI extracted ${created.length} tasks into "${targetEvent.name}" Backlog`,
+      });
 
-    // Clear textarea on success
-    setNotes("");
-    setErrorMsg("");
-    setShowDemoOption(false);
-    setPendingExtractedTasks([]);
-    setChooseBoardModalOpen(false);
+      // Clear textarea and state on success
+      setNotes("");
+      setErrorMsg("");
+      setShowDemoOption(false);
+      setPendingExtractedTasks([]);
+      setChooseBoardModalOpen(false);
 
-    // Show Toast with Undo action
-    setToastData({
-      message: `AI added ${created.length} task(s) to "${targetEvent.name}"`,
-      type: "success",
-      action: {
-        label: "Undo",
-        onClick: async () => {
-          await deleteTasksBatchFromEvent(targetEventId, createdIds);
-          addNotification({
-            type: "ai",
-            message: `Undid AI task extraction for ${targetEvent.name} (deleted ${createdIds.length} tasks)`,
-          });
-          setToastData({
-            message: `Undone: Removed ${createdIds.length} task(s) from "${targetEvent.name}"`,
-            type: "info",
-          });
+      // Show Toast with Undo action
+      setToastData({
+        message: `AI added ${created.length} task(s) to "${targetEvent.name}"`,
+        type: "success",
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            await deleteTasksBatchFromEvent(targetEventId, createdIds);
+            addNotification({
+              type: "ai",
+              message: `Undid AI task extraction for ${targetEvent.name} (deleted ${createdIds.length} tasks)`,
+            });
+            setToastData({
+              message: `Undone: Removed ${createdIds.length} task(s) from "${targetEvent.name}"`,
+              type: "info",
+            });
+          },
         },
-      },
-    });
+      });
+    } catch (err) {
+      console.error("Failed to commit tasks to event board:", err);
+      setErrorMsg(`Could not create tasks: ${err.message}`);
+    } finally {
+      setIsCommitting(false);
+      setProcessing(false);
+      setChooseBoardModalOpen(false);
+    }
   };
 
   // Process with live Gemini AI (or intelligent fallback)
@@ -625,7 +636,12 @@ export default function IntelligenceCard() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setChooseBoardModalOpen(false)}
+              disabled={isCommitting}
+              onClick={() => {
+                setChooseBoardModalOpen(false);
+                setPendingExtractedTasks([]);
+                setProcessing(false);
+              }}
             >
               Cancel
             </Button>
@@ -633,13 +649,14 @@ export default function IntelligenceCard() {
               type="button"
               variant="secondary"
               size="sm"
+              disabled={isCommitting}
               onClick={() =>
                 commitTasksToEventBoard(modalSelectedEventId, pendingExtractedTasks)
               }
               className="!text-xs"
             >
               <Plus size={16} strokeWidth={3} />
-              Confirm & Add Tasks
+              {isCommitting ? "Adding Tasks..." : "Confirm & Add Tasks"}
             </Button>
           </div>
         </div>
