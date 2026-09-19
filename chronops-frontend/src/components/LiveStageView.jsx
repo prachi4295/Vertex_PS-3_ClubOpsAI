@@ -33,6 +33,20 @@ import {
   generateFillerScript,
 } from "../services/gemini";
 import { resetDemoData } from "../data/seed";
+import { INITIAL_EVENTS } from "../data/multiEvents";
+import ConfigureSessionsModal from "./ConfigureSessionsModal";
+
+const LOCAL_EVENTS_STORAGE_KEY = "clubops_all_events_list";
+
+function loadSavedEvents() {
+  try {
+    const raw = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn("Failed to load events in LiveStageView:", e);
+  }
+  return INITIAL_EVENTS;
+}
 
 /**
  * LiveStageView: Full-screen, phone-friendly anchor view for Live Stage mode.
@@ -46,15 +60,35 @@ import { resetDemoData } from "../data/seed";
  * - "Complete and next" button (calls completeSession)
  * - Hidden "Demo controls" drawer with clock speed slider (1x, 30x, 60x) and reset demo data
  * - Designed for one-handed operation at 375px width with 44px+ touch targets
+ * - Multi-event switching and AI-powered session configuration
  */
-export default function LiveStageView() {
+export default function LiveStageView({ initialEventId }) {
+  const [events, setEvents] = useState(loadSavedEvents);
+  const [selectedEventId, setSelectedEventId] = useState(
+    initialEventId || (events[0] && events[0].id) || "hackgenesis-2026"
+  );
+  const [configureModalOpen, setConfigureModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleEventsUpdate = () => {
+      setEvents(loadSavedEvents());
+    };
+    window.addEventListener("clubops-data-updated", handleEventsUpdate);
+    return () =>
+      window.removeEventListener("clubops-data-updated", handleEventsUpdate);
+  }, []);
+
+  const activeEvent =
+    events.find((e) => e.id === selectedEventId) ||
+    events[0] || { id: "hackgenesis-2026", name: "HackGenesis 2026" };
+
   const {
     sessions,
     startSession,
     completeSession,
     updateSession,
     updateSessionsBatch,
-  } = useSessions();
+  } = useSessions(activeEvent.id);
   const { addNotification } = useNotifications();
   const {
     currentTime,
@@ -247,11 +281,11 @@ export default function LiveStageView() {
 
   // ─── Reset Demo Action ───
   const handleResetDemo = async () => {
-    if (window.confirm("Reset all HackGenesis 2026 data and sessions back to initial state?")) {
+    if (window.confirm(`Reset all ${activeEvent.name} data and sessions back to initial state?`)) {
       await resetDemoData();
       resetClock(new Date("2026-09-19T09:35:00"));
       addNotification({
-        message: "Demo data cleanly reset for HackGenesis 2026.",
+        message: `Demo data cleanly reset for ${activeEvent.name}.`,
         type: "action",
       });
     }
@@ -260,15 +294,40 @@ export default function LiveStageView() {
   return (
     <div className="min-h-screen bg-neo-bg text-neo-ink pb-28 pt-3 px-3 sm:px-6 max-w-4xl mx-auto flex flex-col justify-between">
       {/* ─── Top Stage Header Bar ─── */}
-      <div className="flex items-center justify-between gap-2 border-b-4 border-neo-ink pb-3 mb-4">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b-4 border-neo-ink pb-3 mb-4">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="w-3.5 h-3.5 rounded-full bg-neo-accent border-2 border-neo-ink animate-ping inline-block shrink-0" />
           <span className="font-black text-xs uppercase tracking-widest bg-neo-ink text-neo-white px-2.5 py-1 shadow-[2px_2px_0_#FFD93D]">
             LIVE STAGE MONITOR
           </span>
-          <Badge color="secondary" className="hidden sm:inline-flex !text-[10px] !px-2 !py-0.5">
-            HackGenesis 2026
-          </Badge>
+
+          {/* Event Selector Dropdown */}
+          <div className="flex items-center gap-1.5 bg-neo-white border-2 border-neo-ink px-2 py-0.5 shadow-[2px_2px_0_#000]">
+            <span className="text-[10px] font-black uppercase text-neo-ink/70">EVENT:</span>
+            <select
+              value={selectedEventId}
+              onChange={(e) => setSelectedEventId(e.target.value)}
+              className="font-black text-xs bg-transparent border-none outline-none cursor-pointer text-neo-ink pr-1"
+            >
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id} className="font-bold">
+                  {ev.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Configure Sessions with AI Button */}
+          <button
+            type="button"
+            onClick={() => setConfigureModalOpen(true)}
+            className="min-h-[30px] px-2.5 bg-neo-accent border-2 border-neo-ink font-black text-xs uppercase flex items-center gap-1.5 shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer hover:bg-neo-accent/90"
+            title="Configure sessions with AI for this event"
+          >
+            <Sparkles size={13} strokeWidth={3} />
+            <span className="hidden sm:inline">Configure with AI</span>
+            <span className="sm:hidden">AI Config</span>
+          </button>
         </div>
 
         {/* Clock speed readout & drawer trigger */}
@@ -524,8 +583,30 @@ export default function LiveStageView() {
             </div>
           )}
         </div>
+      ) : sessions.length === 0 ? (
+        /* No Sessions Configured for this event */
+        <div className="p-8 text-center bg-neo-white border-4 border-neo-ink shadow-neo my-auto">
+          <div className="w-12 h-12 rounded-full bg-neo-secondary border-4 border-neo-ink flex items-center justify-center mx-auto mb-3 shadow-neo-sm">
+            <Sparkles size={24} strokeWidth={3} />
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-neo-ink mb-1">
+            No Sessions Configured
+          </h2>
+          <p className="text-xs sm:text-sm font-bold text-neo-ink/70 max-w-md mx-auto mb-6">
+            "{activeEvent.name}" doesn't have any scheduled stage sessions yet. Use AI to generate an entire run-of-show timeline in seconds!
+          </p>
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={() => setConfigureModalOpen(true)}
+            className="!min-h-[48px] !text-sm !px-6 mx-auto"
+          >
+            <Sparkles size={16} strokeWidth={3} />
+            Configure Sessions with AI
+          </Button>
+        </div>
       ) : (
-        /* Standby State (no session currently live) */
+        /* Standby State (sessions exist but none is currently live) */
         <div className="p-8 text-center bg-neo-white border-4 border-neo-ink shadow-neo my-auto">
           <div className="w-12 h-12 rounded-full bg-neo-secondary border-4 border-neo-ink flex items-center justify-center mx-auto mb-3 shadow-neo-sm">
             <Radio size={24} strokeWidth={3} />
@@ -539,17 +620,29 @@ export default function LiveStageView() {
               : "All scheduled stage sessions have been completed."}
           </p>
 
-          {nextSession && (
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            {nextSession && (
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={() => startSession(nextSession.id, currentTime)}
+                className="!min-h-[48px] !text-sm !px-6"
+              >
+                <Play size={16} strokeWidth={3} />
+                Start Live Stage: {nextSession.title}
+              </Button>
+            )}
+
             <Button
-              variant="primary"
+              variant="outline"
               size="lg"
-              onClick={() => startSession(nextSession.id, currentTime)}
-              className="!min-h-[48px] !text-sm !px-6 mx-auto"
+              onClick={() => setConfigureModalOpen(true)}
+              className="!min-h-[48px] !text-sm !px-4"
             >
-              <Play size={16} strokeWidth={3} />
-              Start Live Stage: {nextSession.title}
+              <Sparkles size={16} strokeWidth={3} />
+              Re-configure with AI
             </Button>
-          )}
+          </div>
         </div>
       )}
 
@@ -773,6 +866,13 @@ export default function LiveStageView() {
           </div>
         </div>
       )}
+
+      {/* ─── AI Session Configurator Modal ─── */}
+      <ConfigureSessionsModal
+        isOpen={configureModalOpen}
+        onClose={() => setConfigureModalOpen(false)}
+        initialEventId={selectedEventId}
+      />
     </div>
   );
 }

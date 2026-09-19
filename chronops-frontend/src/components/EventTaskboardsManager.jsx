@@ -11,9 +11,13 @@ import {
   ExternalLink,
   Trash2,
   AlertTriangle,
+  Edit3,
+  UploadCloud,
 } from "lucide-react";
 import { Badge, Modal, Input } from "./ui";
 import Button from "./ui/Button";
+import EditEventModal from "./EditEventModal";
+import UploadDocumentModal from "./UploadDocumentModal";
 import { INITIAL_EVENTS } from "../data/multiEvents";
 import { useTasks } from "../hooks/useTasks";
 import { useApp } from "../hooks/useApp";
@@ -39,6 +43,8 @@ export default function EventTaskboardsManager() {
   });
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [editingEventTarget, setEditingEventTarget] = useState(null);
   const [deleteEventTarget, setDeleteEventTarget] = useState(null);
   const [newEventForm, setNewEventForm] = useState({
     name: "",
@@ -48,6 +54,20 @@ export default function EventTaskboardsManager() {
     location: "Campus Auditorium",
   });
   const [formErrors, setFormErrors] = useState({});
+
+  // Sync events from local storage on updates
+  useEffect(() => {
+    const handleUpdate = () => {
+      try {
+        const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
+        if (saved) setEvents(JSON.parse(saved));
+      } catch (e) {
+        // ignore
+      }
+    };
+    window.addEventListener("clubops-data-updated", handleUpdate);
+    return () => window.removeEventListener("clubops-data-updated", handleUpdate);
+  }, []);
 
   // Sync events to local storage
   const saveEvents = (updated) => {
@@ -65,8 +85,9 @@ export default function EventTaskboardsManager() {
     saveEvents(updated);
     try {
       localStorage.removeItem(`clubops_tasks_${deleteEventTarget.id}`);
+      localStorage.removeItem(`clubops_sessions_${deleteEventTarget.id}`);
     } catch (e) {
-      console.warn("Failed to remove event tasks:", e);
+      console.warn("Failed to remove event tasks/sessions:", e);
     }
     setDeleteEventTarget(null);
   };
@@ -149,7 +170,17 @@ export default function EventTaskboardsManager() {
           </p>
         </div>
 
-        <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setUploadModalOpen(true)}
+            className="!h-9 !text-xs !px-3 !border-2 shadow-[2px_2px_0_#000] bg-neo-white hover:bg-neo-secondary"
+          >
+            <UploadCloud size={16} strokeWidth={3} />
+            Upload Document (AI)
+          </Button>
+
           <Button
             variant="primary"
             size="sm"
@@ -184,6 +215,7 @@ export default function EventTaskboardsManager() {
               key={event.id}
               event={event}
               onOpen={() => navigate(`/taskboards/${event.id}`)}
+              onEdit={() => setEditingEventTarget(event)}
               onDelete={() => setDeleteEventTarget(event)}
             />
           ))
@@ -346,6 +378,28 @@ export default function EventTaskboardsManager() {
           </div>
         </div>
       </Modal>
+
+      {/* ─── Edit Event Board Modal ─── */}
+      <EditEventModal
+        open={Boolean(editingEventTarget)}
+        event={editingEventTarget}
+        onClose={() => setEditingEventTarget(null)}
+        onEventUpdated={(updated) => {
+          setEvents((prev) =>
+            prev.map((e) => (e.id === updated.id ? updated : e))
+          );
+        }}
+      />
+
+      {/* ─── Upload Event Document Modal (AI) ─── */}
+      <UploadDocumentModal
+        open={uploadModalOpen}
+        onClose={() => setUploadModalOpen(false)}
+        onEventCreated={(created) => {
+          setEvents((prev) => [created, ...prev]);
+          navigate(`/taskboards/${created.id}`);
+        }}
+      />
     </div>
   );
 }
@@ -355,7 +409,7 @@ export default function EventTaskboardsManager() {
  * Renders an event summary card with live task statistics.
  * Clicking navigates directly to the event's dedicated webpage.
  */
-function EventCardItem({ event, onOpen, onDelete }) {
+function EventCardItem({ event, onOpen, onEdit, onDelete }) {
   const { tasks } = useTasks(event.id);
 
   // Compute live statistics for this board
@@ -461,6 +515,24 @@ function EventCardItem({ event, onOpen, onDelete }) {
             />
           </div>
         </div>
+
+        {/* Edit Taskboard CTA */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
+          title={`Edit ${event.name} details (name, date, location)`}
+          aria-label={`Edit ${event.name} details`}
+          className={[
+            "h-10 w-10 bg-neo-white text-neo-ink border-3 border-neo-ink font-black",
+            "flex items-center justify-center cursor-pointer shadow-neo-sm hover:shadow-neo hover:bg-neo-secondary",
+            "transition-all duration-100 ease-linear active:translate-x-[1px] active:translate-y-[1px] active:shadow-none",
+          ].join(" ")}
+        >
+          <Edit3 size={16} strokeWidth={2.5} />
+        </button>
 
         {/* Delete Taskboard CTA */}
         <button

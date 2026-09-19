@@ -199,15 +199,20 @@ firebase deploy --only hosting,firestore:rules
 ## 📋 Features Walkthrough
 
 1. **Operations Mode**:
-   - **Club Intelligence**: Paste raw standup notes or record speech transcripts. The AI parses tasks, auto-detects the target event board (or prompts with an interactive selection modal), and batch-adds them with an Undo toast.
+   - **Club Intelligence & Missing Details Detection**: Paste raw standup notes or record speech transcripts. The AI analyzes the notes, flags any missing operational specifics (such as unassigned team members, missing deadlines, or unspecified destination events), and opens an interactive Neo-brutalist modal allowing organizers to review, fill in missing fields, and select the destination taskboard.
    - **Event Health Radar**: Dynamic completion percentage, volunteer allocation ratio, and slip risk score.
    - **Quick AI Tools**: Instant 1-minute MC filler speech generator, volunteer coordination email drafter, stage transition script generator, and speaker intro generator with fact-compliance checks.
+
 2. **Event Directory Mode**:
-   - Multi-event workspace (*HackGenesis 2026*, *AI & Web3 Summit 2026*, *Club Orientation & Showcase*, plus `+ New Event Board`).
-   - Click any card to navigate to its dedicated full-page Kanban board (`/taskboards/:eventId`).
-   - Manage tasks with drag-and-drop, status toggling, and priority filters.
-   - Delete event taskboards with a single confirmation click.
+   - **Multi-Event Taskboards**: Switch between multiple concurrent events (*HackGenesis 2026*, *AI & Web3 Summit 2026*, *Club Orientation & Showcase*, plus custom boards).
+   - **Upload Event Document with AI**: Upload event schedules, brochures, or guidelines (`.txt`, `.md`, `.pdf`, `.json`, `.csv`) or paste raw text. The AI extracts the Event metadata, schedule sessions, and operational tasks automatically, creates the event board, and wires everything in seconds.
+   - **Edit Event Board**: Edit Event Name, Date, Location, Category, and Tagline directly from the directory card or from inside the Kanban taskboard.
+   - **Dedicated Kanban View**: Navigate to `/taskboards/:eventId` with drag-and-drop status lanes, priority filtering, subtasks, and board deletion.
+
 3. **Live Stage Mode**:
-   - High-contrast countdown timer and real-time overrun tracker.
-   - `+5m` and `+10m` schedule reflow engine with automatic buffer compression and anchor session protection.
-   - Anchor scripts and speaker phonetic respelling guides.
+   - **Multi-Event Live Stage**: Select any event board via the top stage monitor event dropdown to view and manage its specific stage run-of-show.
+   - **Configure Sessions with AI**: Generate or re-generate logical, time-ordered stage sessions using Gemini AI based on custom agendas or pre-built templates (Hackathon, Technical Conference, Club Orientation).
+   - **Real-Time Countdown & Overrun Monitor**: High-contrast countdown timer that turns hot coral (`#FF6B6B`) and counts up overrun once the session runs past scheduled time.
+   - **Dynamic Reflow Engine**: `+5m` and `+10m` schedule reflow with intelligent buffer compression, flexible session shifts, and fixed anchor protection.
+   - **Stage Anchor Utilities**: AI speaker introductions, transitional bridges, 60s emergency filler scripts, and phonetic pronunciation guides.
+

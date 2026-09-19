@@ -25,8 +25,11 @@ import {
   addTasksBatchToEvent,
   deleteTasksBatchFromEvent,
 } from "../hooks/useTasks";
-import { useNotifications } from "../hooks/useNotifications";
-import { extractTasksFromNotes, formatGeminiError } from "../services/gemini";
+import {
+  extractTasksFromNotes,
+  formatGeminiError,
+  detectMissingTranscriptDetails,
+} from "../services/gemini";
 import { INITIAL_EVENTS } from "../data/multiEvents";
 
 const LOCAL_EVENTS_STORAGE_KEY = "clubops_all_events_list";
@@ -106,8 +109,8 @@ function detectEventFromTranscript(text, eventList) {
 export default function IntelligenceCard() {
   const { addNotification } = useNotifications();
 
-  // Load available events list
-  const [events] = useState(() => {
+  // Load available events list with auto-sync
+  const [events, setEvents] = useState(() => {
     try {
       const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
       if (saved) return JSON.parse(saved);
@@ -117,15 +120,28 @@ export default function IntelligenceCard() {
     return INITIAL_EVENTS;
   });
 
+  useEffect(() => {
+    const handleEventsUpdate = () => {
+      try {
+        const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
+        if (saved) setEvents(JSON.parse(saved));
+      } catch (e) {}
+    };
+    window.addEventListener("clubops-data-updated", handleEventsUpdate);
+    return () =>
+      window.removeEventListener("clubops-data-updated", handleEventsUpdate);
+  }, []);
+
   const [notes, setNotes] = useState("");
   const [targetPreference, setTargetPreference] = useState("auto"); // "auto" or specific eventId
   const [processing, setProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [showDemoOption, setShowDemoOption] = useState(false);
 
-  // Modal state when transcript doesn't know which taskboard to choose
-  const [chooseBoardModalOpen, setChooseBoardModalOpen] = useState(false);
-  const [pendingExtractedTasks, setPendingExtractedTasks] = useState([]);
+  // Missing details state & prompt modal
+  const [missingDetailsModalOpen, setMissingDetailsModalOpen] = useState(false);
+  const [missingDetailsAnalysis, setMissingDetailsAnalysis] = useState(null);
+  const [editableTasks, setEditableTasks] = useState([]);
   const [modalSelectedEventId, setModalSelectedEventId] = useState(
     events[0]?.id || "hackgenesis-2026"
   );
@@ -292,6 +308,53 @@ export default function IntelligenceCard() {
   };
 
   // Process with live Gemini AI (or intelligent fallback)
+  // Process tasks with missing details check
+  const processExtractedTasksWithDetailsCheck = async (extracted) => {
+    // 1. Check if user explicitly set a target board
+    const explicitTarget = targetPreference !== "auto" ? targetPreference : null;
+    const detectedEvent = detectEventFromTranscript(notes, events);
+    const resolvedEvent = explicitTarget
+      ? events.find((e) => e.id === explicitTarget)
+      : detectedEvent;
+
+    // 2. Run missing details analysis
+    const analysis = detectMissingTranscriptDetails(notes, extracted, events);
+
+    // If event is already resolved, don't flag event as missing
+    if (resolvedEvent) {
+      analysis.missingEvent = false;
+      analysis.missingDetailsList = analysis.missingDetailsList.filter(
+        (item) => item.type !== "event"
+      );
+      analysis.hasMissing = analysis.missingDetailsList.length > 0;
+    }
+
+    // Prompt user if ANY specific operational detail is missing
+    if (analysis.hasMissing || !resolvedEvent) {
+      setMissingDetailsAnalysis(analysis);
+      setEditableTasks(
+        extracted.map((t, idx) => ({
+          id: `task-preview-${idx}`,
+          title: t.title || "Untitled Task",
+          assignee: t.assignee || "",
+          dueDate: t.dueDate || "",
+          priority: t.priority || "medium",
+          wasAssigneeMissing: !t.assignee || t.assignee.trim() === "",
+          wasDueDateMissing: !t.dueDate,
+        }))
+      );
+      setModalSelectedEventId(
+        resolvedEvent ? resolvedEvent.id : (events[0]?.id || "hackgenesis-2026")
+      );
+      setMissingDetailsModalOpen(true);
+      setProcessing(false);
+    } else {
+      // Transcript is comprehensive and specifies all details! Commit directly.
+      await commitTasksToEventBoard(resolvedEvent.id, extracted);
+    }
+  };
+
+  // Process with live Gemini AI
   const handleProcessAI = async () => {
     if (!notes.trim()) {
       setErrorMsg("Please paste or record meeting notes first.");
@@ -304,29 +367,15 @@ export default function IntelligenceCard() {
 
     try {
       const extracted = await extractTasksFromNotes(notes);
-
-      // Check if user explicitly chose a destination board beforehand
-      if (targetPreference !== "auto") {
-        await commitTasksToEventBoard(targetPreference, extracted);
-        return;
-      }
-
-      // Check if transcript mentions an event
-      const detected = detectEventFromTranscript(notes, events);
-      if (detected) {
-        // Transcript clearly identified which taskboard!
-        await commitTasksToEventBoard(detected.id, extracted);
-      } else {
-        // TRANSCRIPT DOES NOT SPECIFY AN EVENT -> ASK THE USER!
-        setPendingExtractedTasks(extracted);
-        setModalSelectedEventId(events[0]?.id || "hackgenesis-2026");
-        setChooseBoardModalOpen(true);
-      }
+      await processExtractedTasksWithDetailsCheck(extracted);
     } catch (err) {
       console.error("AI extraction error:", err);
       const friendly = formatGeminiError(err);
       setErrorMsg(friendly.message);
-      if (friendly.message.includes("VITE_GEMINI_API_KEY")) {
+      if (
+        friendly.message.includes("VITE_GEMINI_API_KEY") ||
+        friendly.message.includes("API key")
+      ) {
         setShowDemoOption(true);
       }
     } finally {
@@ -337,24 +386,27 @@ export default function IntelligenceCard() {
   // Demo fallback action for testing when key is missing
   const handleProcessDemoMock = async () => {
     setProcessing(true);
+    setErrorMsg("");
+    setShowDemoOption(false);
     try {
-      if (targetPreference !== "auto") {
-        await commitTasksToEventBoard(targetPreference, DEMO_EXTRACTED_TASKS);
-      } else {
-        const detected = detectEventFromTranscript(notes, events);
-        if (detected) {
-          await commitTasksToEventBoard(detected.id, DEMO_EXTRACTED_TASKS);
-        } else {
-          setPendingExtractedTasks(DEMO_EXTRACTED_TASKS);
-          setModalSelectedEventId(events[0]?.id || "hackgenesis-2026");
-          setChooseBoardModalOpen(true);
-        }
-      }
+      await processExtractedTasksWithDetailsCheck(DEMO_EXTRACTED_TASKS);
     } catch (err) {
       setErrorMsg(err.message);
     } finally {
       setProcessing(false);
     }
+  };
+
+  // Commit from the Missing Details Prompt Modal
+  const handleConfirmFromModal = async () => {
+    const tasksToCommit = editableTasks.map((t) => ({
+      title: t.title,
+      assignee: t.assignee.trim(),
+      dueDate: t.dueDate || null,
+      priority: t.priority,
+    }));
+    await commitTasksToEventBoard(modalSelectedEventId, tasksToCommit);
+    setMissingDetailsModalOpen(false);
   };
 
   return (
@@ -531,102 +583,201 @@ export default function IntelligenceCard() {
         </div>
       </Card>
 
-      {/* ─── Choose Taskboard Modal (Triggered when transcript does NOT specify an event) ─── */}
+      {/* ─── Modal: Missing Transcript Details Prompt ─── */}
       <Modal
-        open={chooseBoardModalOpen}
-        onClose={() => setChooseBoardModalOpen(false)}
-        title="Select Target Event Taskboard"
+        isOpen={missingDetailsModalOpen}
+        onClose={() => {
+          if (!isCommitting) {
+            setMissingDetailsModalOpen(false);
+            setEditableTasks([]);
+            setProcessing(false);
+          }
+        }}
+        title="⚠️ Missing Details in Transcript Detected"
+        size="lg"
       >
         <div className="space-y-4">
-          {/* Prompt banner */}
-          <div className="p-3 bg-neo-secondary/30 border-3 border-neo-ink flex items-start gap-2.5">
-            <HelpCircle size={20} strokeWidth={3} className="text-neo-ink shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-black uppercase text-neo-ink">
-                Event Not Specified in Transcript
-              </p>
-              <p className="text-xs font-bold text-neo-ink/80 mt-0.5">
-                We successfully extracted {pendingExtractedTasks.length} actionable task(s), but the notes didn't mention which event they belong to. Which taskboard should they be added to?
-              </p>
+          {/* Missing details breakdown banner */}
+          <div className="p-3.5 bg-[#FFF9D2] border-3 border-neo-ink space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={18} strokeWidth={3} className="text-neo-ink shrink-0" />
+              <span className="font-black text-xs uppercase tracking-wider text-neo-ink">
+                Please provide or confirm the following missing operational details:
+              </span>
             </div>
+            <ul className="space-y-1 pl-6 list-disc text-xs font-bold text-neo-ink/90">
+              {missingDetailsAnalysis?.missingEvent && (
+                <li>
+                  <span className="text-red-700 font-black">Target Event Board:</span> The transcript did not specify which event these tasks belong to.
+                </li>
+              )}
+              {missingDetailsAnalysis?.unassignedTasks?.length > 0 && (
+                <li>
+                  <span className="text-amber-800 font-black">Unassigned Tasks:</span> {missingDetailsAnalysis.unassignedTasks.length} task(s) do not have an assigned person or volunteer.
+                </li>
+              )}
+              {missingDetailsAnalysis?.missingTimingTasks?.length > 0 && (
+                <li>
+                  <span className="text-amber-800 font-black">Missing Deadlines:</span> {missingDetailsAnalysis.missingTimingTasks.length} task(s) do not have a due date or timing mentioned.
+                </li>
+              )}
+            </ul>
           </div>
 
-          {/* Preview of extracted tasks */}
-          <div className="border-2 border-neo-ink p-3 bg-neo-bg/50 max-h-36 overflow-y-auto space-y-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-neo-ink/60">
-              Extracted Tasks Preview ({pendingExtractedTasks.length})
-            </span>
-            {pendingExtractedTasks.map((t, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between text-xs bg-neo-white border border-neo-ink px-2.5 py-1"
-              >
-                <span className="font-bold text-neo-ink truncate flex-1 mr-2">
-                  {t.title}
+          {/* Selectable Event Taskboards */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black uppercase tracking-wider text-neo-ink">
+                1. Destination Event Board:
+              </label>
+              {missingDetailsAnalysis?.missingEvent ? (
+                <span className="text-[10px] font-black uppercase text-red-600 bg-neo-white px-1.5 py-0.5 border border-neo-ink">
+                  Required Choice
                 </span>
-                <Badge
-                  color={
-                    t.priority === "high"
-                      ? "accent"
-                      : t.priority === "medium"
-                      ? "secondary"
-                      : "muted"
-                  }
-                  className="!text-[9px] !px-1.5 !py-0 !border"
-                >
-                  {t.priority}
-                </Badge>
-              </div>
-            ))}
-          </div>
+              ) : (
+                <span className="text-[10px] font-black uppercase text-emerald-700 bg-neo-white px-1.5 py-0.5 border border-neo-ink">
+                  Detected / Selected
+                </span>
+              )}
+            </div>
 
-          {/* Selectable Event Taskboards List */}
-          <div className="space-y-2">
-            <span className="text-xs font-black uppercase tracking-wider text-neo-ink">
-              Choose Destination Taskboard:
-            </span>
-            <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {events.map((ev) => {
                 const isSelected = modalSelectedEventId === ev.id;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={ev.id}
                     onClick={() => setModalSelectedEventId(ev.id)}
                     className={[
-                      "p-3 border-3 border-neo-ink cursor-pointer flex items-center justify-between transition-all duration-100 ease-linear",
+                      "p-2.5 text-left border-3 border-neo-ink transition-all cursor-pointer flex flex-col justify-between",
                       isSelected
-                        ? "bg-neo-secondary shadow-neo-sm translate-x-[2px]"
+                        ? "bg-neo-secondary shadow-neo-sm font-black translate-x-[1px] translate-y-[1px]"
                         : "bg-neo-white hover:bg-neo-bg shadow-[2px_2px_0_#000]",
                     ].join(" ")}
                   >
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-sm uppercase text-neo-ink">
-                          {ev.name}
-                        </span>
-                        <Badge
-                          color="muted"
-                          className="!text-[9px] !px-1.5 !py-0 !border"
-                        >
-                          {ev.category}
-                        </Badge>
-                      </div>
-                      <p className="text-[11px] font-bold text-neo-ink/60 uppercase">
-                        {ev.tagline || ev.location}
-                      </p>
+                    <div className="flex items-center justify-between gap-1 w-full mb-1">
+                      <span className="text-xs font-black truncate">{ev.name}</span>
+                      {isSelected && <Check size={14} strokeWidth={3} className="shrink-0" />}
                     </div>
-
-                    <div
-                      className={[
-                        "w-6 h-6 border-2 border-neo-ink flex items-center justify-center shrink-0",
-                        isSelected ? "bg-neo-ink text-neo-white" : "bg-neo-white",
-                      ].join(" ")}
-                    >
-                      {isSelected && <Check size={14} strokeWidth={3} />}
-                    </div>
-                  </div>
+                    <span className="text-[10px] font-bold text-neo-ink/70 uppercase truncate">
+                      {ev.tagline || ev.category}
+                    </span>
+                  </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Inline Tasks Editor for Missing Fields */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black uppercase tracking-wider text-neo-ink">
+                2. Review Tasks & Fill Missing Details ({editableTasks.length}):
+              </label>
+              <span className="text-[10px] font-bold text-neo-ink/70">
+                Highlighted fields were missing from notes
+              </span>
+            </div>
+
+            <div className="border-3 border-neo-ink bg-neo-bg/40 p-2.5 max-h-60 overflow-y-auto space-y-2">
+              {editableTasks.map((task, idx) => (
+                <div
+                  key={task.id}
+                  className="bg-neo-white border-2 border-neo-ink p-2.5 shadow-[2px_2px_0_#000] space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <input
+                      type="text"
+                      value={task.title}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditableTasks((prev) =>
+                          prev.map((t, i) => (i === idx ? { ...t, title: val } : t))
+                        );
+                      }}
+                      className="font-black text-xs text-neo-ink bg-transparent border-b-2 border-neo-ink/30 focus:border-neo-ink outline-none flex-1 pb-0.5"
+                    />
+                    <select
+                      value={task.priority}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditableTasks((prev) =>
+                          prev.map((t, i) => (i === idx ? { ...t, priority: val } : t))
+                        );
+                      }}
+                      className="text-[10px] font-black border border-neo-ink bg-neo-bg px-1 py-0.5"
+                    >
+                      <option value="low">LOW</option>
+                      <option value="medium">MEDIUM</option>
+                      <option value="high">HIGH</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {/* Assignee Input */}
+                    <div>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[10px] font-bold uppercase text-neo-ink/70">
+                          Assignee:
+                        </span>
+                        {task.wasAssigneeMissing && !task.assignee && (
+                          <span className="text-[9px] font-black uppercase text-amber-800 bg-amber-100 px-1 border border-amber-400">
+                            Missing in Notes
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="e.g. Arjun, Priya, Core Team"
+                        value={task.assignee}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditableTasks((prev) =>
+                            prev.map((t, i) => (i === idx ? { ...t, assignee: val } : t))
+                          );
+                        }}
+                        className={[
+                          "w-full px-2 py-1 text-xs font-bold border-2 outline-none",
+                          task.wasAssigneeMissing && !task.assignee
+                            ? "border-amber-500 bg-amber-50/50"
+                            : "border-neo-ink bg-neo-white",
+                        ].join(" ")}
+                      />
+                    </div>
+
+                    {/* Due Date Input */}
+                    <div>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[10px] font-bold uppercase text-neo-ink/70">
+                          Due Date:
+                        </span>
+                        {task.wasDueDateMissing && !task.dueDate && (
+                          <span className="text-[9px] font-black uppercase text-amber-800 bg-amber-100 px-1 border border-amber-400">
+                            Missing in Notes
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="date"
+                        value={task.dueDate}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditableTasks((prev) =>
+                            prev.map((t, i) => (i === idx ? { ...t, dueDate: val } : t))
+                          );
+                        }}
+                        className={[
+                          "w-full px-2 py-1 text-xs font-bold border-2 outline-none",
+                          task.wasDueDateMissing && !task.dueDate
+                            ? "border-amber-500 bg-amber-50/50"
+                            : "border-neo-ink bg-neo-white",
+                        ].join(" ")}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -638,8 +789,8 @@ export default function IntelligenceCard() {
               size="sm"
               disabled={isCommitting}
               onClick={() => {
-                setChooseBoardModalOpen(false);
-                setPendingExtractedTasks([]);
+                setMissingDetailsModalOpen(false);
+                setEditableTasks([]);
                 setProcessing(false);
               }}
             >
@@ -650,13 +801,11 @@ export default function IntelligenceCard() {
               variant="secondary"
               size="sm"
               disabled={isCommitting}
-              onClick={() =>
-                commitTasksToEventBoard(modalSelectedEventId, pendingExtractedTasks)
-              }
+              onClick={handleConfirmFromModal}
               className="!text-xs"
             >
               <Plus size={16} strokeWidth={3} />
-              {isCommitting ? "Adding Tasks..." : "Confirm & Add Tasks"}
+              {isCommitting ? "Creating Tasks..." : "Apply Details & Create Tasks"}
             </Button>
           </div>
         </div>

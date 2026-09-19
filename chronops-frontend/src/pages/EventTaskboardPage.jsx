@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -11,9 +11,11 @@ import {
   Sparkles,
   Trash2,
   AlertTriangle,
+  Edit3,
 } from "lucide-react";
 import Header from "../components/Header";
 import KanbanBoard from "../components/KanbanBoard";
+import EditEventModal from "../components/EditEventModal";
 import { Badge, Modal } from "../components/ui";
 import Button from "../components/ui/Button";
 import { INITIAL_EVENTS } from "../data/multiEvents";
@@ -31,9 +33,12 @@ export default function EventTaskboardPage() {
   const navigate = useNavigate();
   const { goTasks } = useApp();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [eventOverride, setEventOverride] = useState(null);
 
   // Retrieve event metadata from storage or presets
   const event = useMemo(() => {
+    if (eventOverride) return eventOverride;
     try {
       const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
       if (saved) {
@@ -57,7 +62,7 @@ export default function EventTaskboardPage() {
       location: "Campus Venue",
       color: "secondary",
     };
-  }, [eventId]);
+  }, [eventId, eventOverride]);
 
   const { tasks } = useTasks(eventId);
 
@@ -188,6 +193,19 @@ export default function EventTaskboardPage() {
               </div>
             </div>
 
+            {/* Edit Board Button */}
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => setEditModalOpen(true)}
+              className="!h-10 !text-xs !px-3 shadow-[2px_2px_0_#000] hover:!bg-neo-secondary text-neo-ink"
+              title="Edit Board (Name, Date, Location)"
+              aria-label="Edit this taskboard"
+            >
+              <Edit3 size={16} strokeWidth={2.5} />
+              <span className="hidden sm:inline">Edit Board</span>
+            </Button>
+
             {/* Delete Taskboard Button */}
             <Button
               variant="outline"
@@ -211,6 +229,16 @@ export default function EventTaskboardPage() {
           />
         </div>
       </main>
+
+      {/* Edit Event Board Modal */}
+      <EditEventModal
+        open={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        event={event}
+        onEventUpdated={(updated) => {
+          setEventOverride(updated);
+        }}
+      />
 
       {/* Delete Taskboard Confirmation Modal */}
       <Modal

@@ -36,6 +36,20 @@ const statusConfig = {
   },
 };
 
+import { INITIAL_EVENTS } from "../data/multiEvents";
+
+const LOCAL_EVENTS_STORAGE_KEY = "clubops_all_events_list";
+
+function loadSavedEvents() {
+  try {
+    const raw = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn("Failed to load events in LiveFlowPreview:", e);
+  }
+  return INITIAL_EVENTS;
+}
+
 /**
  * LiveFlowPreview:
  * - Compact chronological list with status tags (Completed, In Progress, Up Next)
@@ -45,16 +59,24 @@ const statusConfig = {
  * - Red accent warning banner with Confirm/Cancel step when a fixed session would slip
  * - Start / Complete session controls
  * - Filtered by global search string
+ * - Multi-event switching support
  */
-export default function LiveFlowPreview() {
+export default function LiveFlowPreview({ eventId }) {
   const { searchQuery } = useApp();
+  const [events, setEvents] = useState(loadSavedEvents);
+  const [selectedEventId, setSelectedEventId] = useState(
+    eventId || (events[0] && events[0].id) || "hackgenesis-2026"
+  );
+
+  const activeEventId = eventId || selectedEventId;
+
   const {
     sessions,
     loading,
     startSession,
     completeSession,
     updateSessionsBatch,
-  } = useSessions();
+  } = useSessions(activeEventId);
   const { addNotification } = useNotifications();
 
   // Local state for delay inputs and pending reflow warnings
@@ -166,21 +188,37 @@ export default function LiveFlowPreview() {
   return (
     <Card
       headerContent={
-        <div className="flex items-center justify-between w-full">
+        <div className="flex items-center justify-between w-full flex-wrap gap-1">
           <span className="flex items-center gap-2">
             <Clock size={16} strokeWidth={3} />
             Live Flow Preview
           </span>
-          {liveSession ? (
-            <span className="flex items-center gap-1.5 bg-neo-accent text-neo-ink px-2 py-0.5 text-[10px] font-black border border-neo-ink">
-              <span className="w-2 h-2 rounded-full bg-red-600 animate-ping inline-block" />
-              STAGE LIVE
-            </span>
-          ) : (
-            <span className="bg-neo-bg text-neo-ink/70 px-2 py-0.5 text-[10px] font-black border border-neo-ink">
-              STANDBY
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {!eventId && events.length > 1 && (
+              <select
+                value={selectedEventId}
+                onChange={(e) => setSelectedEventId(e.target.value)}
+                className="text-[10px] font-black bg-neo-white border border-neo-ink px-1.5 py-0.5 outline-none cursor-pointer"
+                title="Select event to preview"
+              >
+                {events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {liveSession ? (
+              <span className="flex items-center gap-1.5 bg-neo-accent text-neo-ink px-2 py-0.5 text-[10px] font-black border border-neo-ink">
+                <span className="w-2 h-2 rounded-full bg-red-600 animate-ping inline-block" />
+                STAGE LIVE
+              </span>
+            ) : (
+              <span className="bg-neo-bg text-neo-ink/70 px-2 py-0.5 text-[10px] font-black border border-neo-ink">
+                STANDBY
+              </span>
+            )}
+          </div>
         </div>
       }
       headerColor="bg-neo-accent"

@@ -17,8 +17,17 @@ import {
   SEED_SESSIONS,
   LOCAL_SESSIONS_KEY,
 } from "../data/seed";
+import { AI_SUMMIT_SESSIONS, CLUB_ORIENTATION_SESSIONS } from "../data/multiEvents";
 
 const SessionsContext = createContext(null);
+
+const withTimeout = (promise, ms = 1800) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Firestore session operation timed out")), ms)
+    ),
+  ]);
 
 function getLocalSessions(eventId) {
   try {
@@ -33,6 +42,14 @@ function getLocalSessions(eventId) {
   } catch (e) {
     console.warn("Failed to load local sessions:", e);
   }
+
+  if (eventId === "ai-summit-2026") {
+    return AI_SUMMIT_SESSIONS.map((s) => ({ ...s }));
+  }
+  if (eventId === "club-orientation-2026") {
+    return CLUB_ORIENTATION_SESSIONS.map((s) => ({ ...s }));
+  }
+
   return SEED_SESSIONS.map((s, i) => ({
     ...s,
     id: s.id || `session-${i + 1}`,
@@ -56,8 +73,17 @@ function saveLocalSessions(eventId, sessions) {
  * Hook to manage live sessions for an event via onSnapshot with client-side sorting.
  */
 export function useEventSessions(eventId = DEMO_EVENT_ID) {
-  const [sessions, setSessions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [sessions, setSessions] = useState(() => {
+    if (!eventId) return [];
+    const localData = getLocalSessions(eventId);
+    localData.sort((a, b) => (a.order || 0) - (b.order || 0));
+    return localData;
+  });
+  const [loading, setLoading] = useState(() => {
+    if (!eventId) return false;
+    const localData = getLocalSessions(eventId);
+    return localData.length === 0;
+  });
   const [error, setError] = useState(null);
 
   const reloadFromLocal = useCallback(() => {
@@ -76,13 +102,18 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
     }
 
     if (isFirebaseConfigured && db) {
-      setLoading(true);
+      // Fallback timer so loading never hangs
+      const timer = setTimeout(() => {
+        setLoading(false);
+      }, 1500);
+
       // Query by eventId only — client-side sort per ANTIGRAVITY_CONTEXT.md
       const q = query(collection(db, "sessions"), where("eventId", "==", eventId));
 
       const unsub = onSnapshot(
         q,
         (snap) => {
+          clearTimeout(timer);
           const docs = snap.docs.map((d) => {
             const data = d.data();
             return {
@@ -99,13 +130,17 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
           setError(null);
         },
         (err) => {
-          console.error("Firestore sessions error:", err);
-          setError(err.message);
+          clearTimeout(timer);
+          console.warn("Firestore sessions error, falling back to local storage:", err);
+          setError(null);
           reloadFromLocal();
         }
       );
 
-      return () => unsub();
+      return () => {
+        clearTimeout(timer);
+        unsub();
+      };
     } else {
       reloadFromLocal();
 
@@ -136,23 +171,32 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
         script: sessionData.script || "",
       };
 
-      if (!isFirebaseConfigured || !db) {
-        const localItem = {
-          ...newSession,
-          id: `session-${Date.now()}`,
-        };
-        setSessions((prev) => {
-          const updated = [...prev, localItem];
-          updated.sort((a, b) => (a.order || 0) - (b.order || 0));
-          saveLocalSessions(eventId, updated);
-          return updated;
-        });
+      const localItem = {
+        ...newSession,
+        id: sessionData.id || `session-${Date.now()}`,
+      };
+
+      setSessions((prev) => {
+        const updated = [...prev, localItem];
+        updated.sort((a, b) => (a.order || 0) - (b.order || 0));
+        saveLocalSessions(eventId, updated);
+        return updated;
+      });
+      if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      if (!isFirebaseConfigured || !db) {
         return localItem;
       }
 
-      const docRef = await addDoc(collection(db, "sessions"), newSession);
-      return { id: docRef.id, ...newSession };
+      try {
+        const docRef = await withTimeout(addDoc(collection(db, "sessions"), newSession), 1800);
+        return { id: docRef.id, ...newSession };
+      } catch (err) {
+        console.warn("Firestore addSession sync timed out or failed, kept local:", err);
+        return localItem;
+      }
     },
     [eventId, sessions.length]
   );
@@ -160,20 +204,27 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
   // ─── Update session ───
   const updateSession = useCallback(
     async (sessionId, updates) => {
-      if (!isFirebaseConfigured || !db) {
-        setSessions((prev) => {
-          const updated = prev.map((s) =>
-            s.id === sessionId ? { ...s, ...updates } : s
-          );
-          updated.sort((a, b) => (a.order || 0) - (b.order || 0));
-          saveLocalSessions(eventId, updated);
-          return updated;
-        });
+      setSessions((prev) => {
+        const updated = prev.map((s) =>
+          s.id === sessionId ? { ...s, ...updates } : s
+        );
+        updated.sort((a, b) => (a.order || 0) - (b.order || 0));
+        saveLocalSessions(eventId, updated);
+        return updated;
+      });
+      if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      if (!isFirebaseConfigured || !db) {
         return;
       }
 
-      await updateDoc(doc(db, "sessions", sessionId), updates);
+      try {
+        await withTimeout(updateDoc(doc(db, "sessions", sessionId), updates), 1800);
+      } catch (err) {
+        console.warn("Firestore updateSession sync timed out or failed, kept local:", err);
+      }
     },
     [eventId]
   );
@@ -181,17 +232,24 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
   // ─── Delete session ───
   const deleteSession = useCallback(
     async (sessionId) => {
-      if (!isFirebaseConfigured || !db) {
-        setSessions((prev) => {
-          const updated = prev.filter((s) => s.id !== sessionId);
-          saveLocalSessions(eventId, updated);
-          return updated;
-        });
+      setSessions((prev) => {
+        const updated = prev.filter((s) => s.id !== sessionId);
+        saveLocalSessions(eventId, updated);
+        return updated;
+      });
+      if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      if (!isFirebaseConfigured || !db) {
         return;
       }
 
-      await deleteDoc(doc(db, "sessions", sessionId));
+      try {
+        await withTimeout(deleteDoc(doc(db, "sessions", sessionId)), 1800);
+      } catch (err) {
+        console.warn("Firestore deleteSession sync timed out or failed, kept local:", err);
+      }
     },
     [eventId]
   );
@@ -201,77 +259,89 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
     async (updatedSessionsList) => {
       if (!Array.isArray(updatedSessionsList) || updatedSessionsList.length === 0) return;
 
-      if (!isFirebaseConfigured || !db) {
-        setSessions((prev) => {
-          const updateMap = new Map(updatedSessionsList.map((s) => [s.id, s]));
-          const updated = prev.map((s) => (updateMap.has(s.id) ? { ...s, ...updateMap.get(s.id) } : s));
-          updated.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.startTime || "").localeCompare(b.startTime || ""));
-          saveLocalSessions(eventId, updated);
-          return updated;
-        });
+      setSessions((prev) => {
+        const updateMap = new Map(updatedSessionsList.map((s) => [s.id, s]));
+        const updated = prev.map((s) => (updateMap.has(s.id) ? { ...s, ...updateMap.get(s.id) } : s));
+        updated.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.startTime || "").localeCompare(b.startTime || ""));
+        saveLocalSessions(eventId, updated);
+        return updated;
+      });
+      if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      if (!isFirebaseConfigured || !db) {
         return;
       }
 
-      const batch = writeBatch(db);
-      updatedSessionsList.forEach((s) => {
-        const ref = doc(db, "sessions", s.id);
-        const updates = {
-          startTime: s.startTime,
-          durationMinutes: s.durationMinutes,
-        };
-        if (s.order !== undefined) updates.order = s.order;
-        if (s.status !== undefined) updates.status = s.status;
-        if (s.actualStart !== undefined) {
-          updates.actualStart =
-            s.actualStart instanceof Date
-              ? Timestamp.fromDate(s.actualStart)
-              : s.actualStart;
-        }
-        batch.update(ref, updates);
-      });
-      await batch.commit();
+      try {
+        const batch = writeBatch(db);
+        updatedSessionsList.forEach((s) => {
+          const ref = doc(db, "sessions", s.id);
+          const updates = {
+            startTime: s.startTime,
+            durationMinutes: s.durationMinutes,
+          };
+          if (s.order !== undefined) updates.order = s.order;
+          if (s.status !== undefined) updates.status = s.status;
+          if (s.actualStart !== undefined) {
+            updates.actualStart =
+              s.actualStart instanceof Date
+                ? Timestamp.fromDate(s.actualStart)
+                : s.actualStart;
+          }
+          batch.update(ref, updates);
+        });
+        await withTimeout(batch.commit(), 1800);
+      } catch (err) {
+        console.warn("Firestore updateSessionsBatch sync timed out or failed, kept local:", err);
+      }
     },
     [eventId]
   );
 
-  // ─── Start session (sets status: 'live' and actualStart: Timestamp) ───
   // ─── Start session (sets status: 'live' and actualStart: Timestamp) ───
   const startSession = useCallback(
     async (sessionId, customStartTime = null) => {
       const now = customStartTime instanceof Date ? customStartTime : new Date();
       const timestampVal = isFirebaseConfigured && db ? Timestamp.fromDate(now) : now;
 
-      // Also set any currently live session to completed
       const otherLive = sessions.filter((s) => s.status === "live" && s.id !== sessionId);
 
-      if (!isFirebaseConfigured || !db) {
-        setSessions((prev) => {
-          const updated = prev.map((s) => {
-            if (s.id === sessionId) {
-              return { ...s, status: "live", actualStart: now };
-            }
-            if (s.status === "live") {
-              return { ...s, status: "completed" };
-            }
-            return s;
-          });
-          saveLocalSessions(eventId, updated);
-          return updated;
+      setSessions((prev) => {
+        const updated = prev.map((s) => {
+          if (s.id === sessionId) {
+            return { ...s, status: "live", actualStart: now };
+          }
+          if (s.status === "live") {
+            return { ...s, status: "completed" };
+          }
+          return s;
         });
+        saveLocalSessions(eventId, updated);
+        return updated;
+      });
+      if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      if (!isFirebaseConfigured || !db) {
         return;
       }
 
-      const batch = writeBatch(db);
-      otherLive.forEach((s) => {
-        batch.update(doc(db, "sessions", s.id), { status: "completed" });
-      });
-      batch.update(doc(db, "sessions", sessionId), {
-        status: "live",
-        actualStart: timestampVal,
-      });
-      await batch.commit();
+      try {
+        const batch = writeBatch(db);
+        otherLive.forEach((s) => {
+          batch.update(doc(db, "sessions", s.id), { status: "completed" });
+        });
+        batch.update(doc(db, "sessions", sessionId), {
+          status: "live",
+          actualStart: timestampVal,
+        });
+        await withTimeout(batch.commit(), 1800);
+      } catch (err) {
+        console.warn("Firestore startSession sync timed out or failed, kept local:", err);
+      }
     },
     [eventId, sessions]
   );
@@ -282,40 +352,46 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
       const now = customStartTime instanceof Date ? customStartTime : new Date();
       const timestampVal = isFirebaseConfigured && db ? Timestamp.fromDate(now) : now;
 
-      // Find next upcoming session by order
       const sortedUpcoming = [...sessions]
         .filter((s) => s.status === "upcoming" && s.id !== sessionId)
         .sort((a, b) => (a.order || 0) - (b.order || 0) || (a.startTime || "").localeCompare(b.startTime || ""));
 
       const nextSession = sortedUpcoming[0] || null;
 
-      if (!isFirebaseConfigured || !db) {
-        setSessions((prev) => {
-          const updated = prev.map((s) => {
-            if (s.id === sessionId) {
-              return { ...s, status: "completed" };
-            }
-            if (nextSession && s.id === nextSession.id) {
-              return { ...s, status: "live", actualStart: now };
-            }
-            return s;
-          });
-          saveLocalSessions(eventId, updated);
-          return updated;
+      setSessions((prev) => {
+        const updated = prev.map((s) => {
+          if (s.id === sessionId) {
+            return { ...s, status: "completed" };
+          }
+          if (nextSession && s.id === nextSession.id) {
+            return { ...s, status: "live", actualStart: now };
+          }
+          return s;
         });
+        saveLocalSessions(eventId, updated);
+        return updated;
+      });
+      if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      if (!isFirebaseConfigured || !db) {
         return;
       }
 
-      const batch = writeBatch(db);
-      batch.update(doc(db, "sessions", sessionId), { status: "completed" });
-      if (nextSession) {
-        batch.update(doc(db, "sessions", nextSession.id), {
-          status: "live",
-          actualStart: timestampVal,
-        });
+      try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, "sessions", sessionId), { status: "completed" });
+        if (nextSession) {
+          batch.update(doc(db, "sessions", nextSession.id), {
+            status: "live",
+            actualStart: timestampVal,
+          });
+        }
+        await withTimeout(batch.commit(), 1800);
+      } catch (err) {
+        console.warn("Firestore completeSession sync timed out or failed, kept local:", err);
       }
-      await batch.commit();
     },
     [eventId, sessions]
   );
@@ -325,25 +401,32 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
     async (orderedIds) => {
       if (!Array.isArray(orderedIds) || orderedIds.length === 0) return;
 
-      if (!isFirebaseConfigured || !db) {
-        setSessions((prev) => {
-          const idOrderMap = new Map(orderedIds.map((id, index) => [id, index + 1]));
-          const updated = prev.map((s) =>
-            idOrderMap.has(s.id) ? { ...s, order: idOrderMap.get(s.id) } : s
-          );
-          updated.sort((a, b) => (a.order || 0) - (b.order || 0));
-          saveLocalSessions(eventId, updated);
-          return updated;
-        });
+      setSessions((prev) => {
+        const idOrderMap = new Map(orderedIds.map((id, index) => [id, index + 1]));
+        const updated = prev.map((s) =>
+          idOrderMap.has(s.id) ? { ...s, order: idOrderMap.get(s.id) } : s
+        );
+        updated.sort((a, b) => (a.order || 0) - (b.order || 0));
+        saveLocalSessions(eventId, updated);
+        return updated;
+      });
+      if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      if (!isFirebaseConfigured || !db) {
         return;
       }
 
-      const batch = writeBatch(db);
-      orderedIds.forEach((id, index) => {
-        batch.update(doc(db, "sessions", id), { order: index + 1 });
-      });
-      await batch.commit();
+      try {
+        const batch = writeBatch(db);
+        orderedIds.forEach((id, index) => {
+          batch.update(doc(db, "sessions", id), { order: index + 1 });
+        });
+        await withTimeout(batch.commit(), 1800);
+      } catch (err) {
+        console.warn("Firestore reorderSessions sync timed out or failed, kept local:", err);
+      }
     },
     [eventId]
   );
@@ -360,6 +443,54 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
     completeSession,
     reorderSessions,
   };
+}
+
+/**
+ * Standalone helper to write a batch of sessions directly to any specific eventId.
+ */
+export async function setSessionsBatchForEvent(eventId, sessionsArray) {
+  const prepared = sessionsArray.map((s, idx) => ({
+    eventId,
+    title: s.title || "Session",
+    speaker: s.speaker || "",
+    bio: s.bio || "",
+    startTime: s.startTime || "10:00",
+    plannedStart: s.plannedStart || s.startTime || "10:00",
+    durationMinutes: Number(s.durationMinutes) || 30,
+    sessionType: s.sessionType === "fixed" ? "fixed" : "flexible",
+    status: s.status || "upcoming",
+    phoneticGuide: s.phoneticGuide || "",
+    order: Number(s.order) || (idx + 1),
+    actualStart: null,
+    script: s.script || "",
+  }));
+
+  const localItems = prepared.map((s, idx) => ({
+    ...s,
+    id: s.id || `session-${Date.now()}-${idx}`,
+  }));
+
+  saveLocalSessions(eventId, localItems);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+  }
+
+  if (!isFirebaseConfigured || !db) {
+    return localItems;
+  }
+
+  try {
+    const batch = writeBatch(db);
+    prepared.forEach((s) => {
+      const ref = doc(collection(db, "sessions"));
+      batch.set(ref, s);
+    });
+    await withTimeout(batch.commit(), 1800);
+  } catch (err) {
+    console.warn("Firestore setSessionsBatchForEvent timed out or failed, saved locally:", err);
+  }
+
+  return localItems;
 }
 
 export function SessionsProvider({ children, eventId = DEMO_EVENT_ID }) {
@@ -383,3 +514,4 @@ export function useSessions(customEventId) {
   }
   return standaloneState;
 }
+
