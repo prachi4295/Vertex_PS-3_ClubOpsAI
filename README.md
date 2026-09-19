@@ -1,100 +1,740 @@
-# \# ⚡ ChronOps: Unified Event Command Center
 
-# > \*\*Problem Statement:\*\* Built for a 24-hour hackathon focusing on club operations, automated task management, and real-time stage execution.
+Absolutely. Here’s a cleaner, more professional GitHub README version for ChronOps, with stronger hierarchy, concise wording, and a hackathon-ready presentation.
 
-# 
+⚡ ChronOps
+Unified Event Command Center
+AI-powered task management + real-time schedule reflow for seamless event execution.
 
-# ChronOps is an all-in-one event management and real-time execution engine designed to eliminate chaotic handovers and stage delays. It bridges automated AI task tracking with a dynamic, real-time schedule reflow system to keep live events running seamlessly.
+ChronOps is an all-in-one event operations platform built for fast-moving clubs, hackathons, conferences, and live events.
 
-# 
+It combines AI-powered meeting intelligence with a real-time schedule reflow engine, helping organizers turn messy discussions into actionable tasks and keep events running even when schedules fall behind.
 
-# \---
+🎯 The Problem
+Event operations often break down because of two recurring problems:
 
-# 
+📝 Meeting decisions get lost
+Unstructured meeting notes make it difficult to identify tasks, assign responsibilities, and track deadlines.
 
-# \## 🚀 Key Features
+⏱️ Live schedules are fragile
+When a session runs over time, organizers have to manually recalculate the remaining schedule, creating delays and communication chaos.
 
-# 
+ChronOps solves both.
+Meeting → AI → Tasks → Execution → Real-time Reflow
 
-# \### 1. \*\*AI Meeting Note Ingestion\*\*
+🚀 Key Features
+🤖 1. AI Meeting Note Ingestion
+Turn messy meeting discussions into structured, actionable tasks.
 
-# \* \*\*The Problem:\*\* Club meeting minutes are messy, unstructured, and often result in lost tasks and unassigned responsibilities.
+Organizers can paste raw meeting notes or transcripts into ChronOps. Using Google Gemini 2.5 Flash, the system automatically extracts:
 
-# \* \*\*The Solution:\*\* Organizers can paste raw meeting text or transcripts into ChronOps. Powered by \*\*Google Gemini 2.5 Flash\*\*, the backend automatically extracts clean, structured tasks (Title, Assignee, Deadline) and pushes them straight to the SQLite database and Kanban board.
+📌 Task title
 
-# 
+👤 Assignee
 
-# \### 2. \*\*Dynamic Time-Reflow Engine\*\*
+📅 Deadline
 
-# \* \*\*The Problem:\*\* Live events always run behind schedule. When one session overruns, manually recalculating the entire remaining run-sheet causes chaos.
+🗂️ Structured task information
 
-# \* \*\*The Solution:\*\* ChronOps features an algorithmic reflow engine. 
+The extracted tasks are automatically stored in the database and displayed on the Kanban board.
 
-# &#x20; \* \*\*Fixed Slots\*\* (e.g., Keynotes, hard booking constraints) act as absolute boundaries that cannot be shifted.
+Example
+Meeting:
+"Rahul will handle the stage setup before 5 PM.
+Priya will contact the speakers by tomorrow."
 
-# &#x20; \* \*\*Flexible Slots\*\* (e.g., Panel Discussions, Q\&A, breaks) automatically compress or push back downstream to absorb delays seamlessly.
+              ↓ Gemini AI
 
-# &#x20; \* Organizers can test this live with the \*\*`+15m Delay`\*\* simulator button in the dashboard.
+┌─────────────────────────────────────┐
+│ Stage Setup                         │
+│ Assignee: Rahul                     │
+│ Deadline: 5:00 PM                   │
+├─────────────────────────────────────┤
+│ Contact Speakers                    │
+│ Assignee: Priya                     │
+│ Deadline: Tomorrow                  │
+└─────────────────────────────────────┘
+⏱️ 2. Dynamic Time-Reflow Engine
+Live events rarely follow the original schedule.
 
-# 
+ChronOps automatically recalculates the run-sheet when delays occur.
 
-# \### 3. \*\*Unified React + FastAPI Architecture\*\*
+🔒 Fixed Slots
+Critical sessions that cannot move.
 
-# \* \*\*Frontend:\*\* Built with React, Vite, Tailwind CSS, and Lucide Icons for a modern dark-mode command center UI.
+Examples:
 
-# \* \*\*Backend:\*\* Built with FastAPI (Python) and SQLAlchemy over a local SQLite database (`chronops.db`).
+Keynote
 
-# 
+Guest appearance
 
-# \---
+External speaker
 
-# 
+Venue booking constraint
 
-# \## 🛠️ Tech Stack
+🔄 Flexible Slots
+Sessions that can automatically absorb delays.
 
-# 
+Examples:
 
-# \* \*\*Backend:\*\* Python, FastAPI, Uvicorn, SQLAlchemy, SQLite, Google GenAI SDK (`google-genai`).
+Panel discussions
 
-# \* \*\*Frontend:\*\* React, Vite, Tailwind CSS, Axios, Lucide React.
+Q&A
 
-# \* \*\*AI Model:\*\* Google Gemini (`gemini-2.5-flash`) via structured schema generation.
+Breaks
 
-# 
+Internal sessions
 
-# \---
+Example
+ORIGINAL SCHEDULE
 
-# 
+10:00  Opening
+10:30  Keynote        🔒 Fixed
+11:30  Panel          🔄 Flexible
+12:15  Q&A            🔄 Flexible
+12:45  Lunch          🔄 Flexible
 
-# \## 📂 Project Structure
 
-# 
+              +15 MIN DELAY
+                    ↓
 
-# ```text
 
-# Vertex\_PS-3\_ClubOpsAI/
+REFLOWED SCHEDULE
 
-# ├── chronops-backend/
+10:15  Opening
+10:45  Keynote        🔒 Fixed
+11:30  Panel          🔄 Compressed
+12:15  Q&A            🔄 Flexible
+12:45  Lunch          🔄 Flexible
+Organizers can simulate this directly from the dashboard using the:
 
-# │   ├── main.py            # FastAPI entrypoint, database init, API routes
++15m Delay Simulator
+No manual recalculation.
+No spreadsheet chaos.
+Just an updated run-sheet.
 
-# │   ├── database.py        # SQLAlchemy SQLite setup and session handling
+🖥️ 3. Unified Command Center
+ChronOps provides a single dashboard for both planning and execution.
 
-# │   ├── models.py          # Database tables (Sessions, Tasks, MeetingNotes)
+Run-Sheet View
+Monitor the live event timeline and immediately see:
 
-# │   ├── ai\_service.py      # Gemini AI integration for structured task parsing
+Current session
 
-# │   ├── reflow\_engine.py   # Delay propagation and schedule compression logic
+Upcoming sessions
 
-# │   └── chronops.db        # SQLite database (auto-generated)
+Delays
 
-# └── chronops-frontend/
+Fixed constraints
 
-# &#x20;   ├── src/
+Reflowed timings
 
-# &#x20;   │   └── App.jsx        # Main dashboard UI (Run-Sheet \& Kanban views)
+Kanban View
+Track operational tasks using a simple workflow:
 
-# &#x20;   ├── package.json
+┌──────────────┬──────────────┬──────────────┐
+│ TODO         │ IN PROGRESS  │ DONE         │
+├──────────────┼──────────────┼──────────────┤
+│ Stage Setup  │ Speaker Call │ Registration │
+│ AV Check     │ Banner       │ Volunteers   │
+│ Guest Kit    │              │              │
+└──────────────┴──────────────┴──────────────┘
+🏗️ Architecture
+                 ┌──────────────────────┐
+                 │      React UI        │
+                 │ Vite + Tailwind CSS  │
+                 └──────────┬───────────┘
+                            │
+                         REST API
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │       FastAPI        │
+                 │      Backend         │
+                 └───────┬───────┬──────┘
+                         │       │
+             ┌───────────┘       └────────────┐
+             ▼                                ▼
+     ┌────────────────┐              ┌─────────────────┐
+     │    SQLite      │              │   Gemini AI     │
+     │   Database     │              │  2.5 Flash      │
+     └────────────────┘              └─────────────────┘
+             │
+             ▼
+     ┌────────────────┐
+     │ Reflow Engine  │
+     │ Delay Handling │
+     └────────────────┘
+🛠️ Tech Stack
+Layer	Technology
+🎨 Frontend	React, Vite
+💅 Styling	Tailwind CSS
+🎯 Icons	Lucide React
+🔌 API	FastAPI
+🐍 Backend	Python
+🗄️ Database	SQLite
+🧩 ORM	SQLAlchemy
+🤖 AI	Google Gemini 2.5 Flash
+📡 HTTP Client	Axios
+🚀 Server	Uvicorn
+📂 Project Structure
+Vertex_PS-3_ClubOpsAI/
+│
+├── chronops-backend/
+│   │
+│   ├── main.py
+│   │   ├── FastAPI entrypoint
+│   │   ├── API routes
+│   │   └── Database initialization
+│   │
+│   ├── database.py
+│   │   └── SQLAlchemy + SQLite configuration
+│   │
+│   ├── models.py
+│   │   └── Database models
+│   │
+│   ├── ai_service.py
+│   │   └── Gemini AI integration
+│   │
+│   ├── reflow_engine.py
+│   │   └── Schedule delay & compression logic
+│   │
+│   └── chronops.db
+│       └── SQLite database
+│
+└── chronops-frontend/
+    │
+    ├── src/
+    │   └── App.jsx
+    │       └── Main dashboard
+    │
+    ├── package.json
+    └── tailwind.config.js
+⚙️ How ChronOps Works
+          MEETING
+             │
+             ▼
+      Meeting Notes
+             │
+             ▼
+        Gemini AI
+             │
+             ▼
+     Structured Tasks
+             │
+             ▼
+       ┌───────────┐
+       │  Kanban   │
+       │  Board    │
+       └───────────┘
 
-# &#x20;   └── tailwind.config.js
+
+        LIVE EVENT
+             │
+             ▼
+       Session Delay
+             │
+             ▼
+      Reflow Engine
+             │
+       ┌─────┴─────┐
+       ▼           ▼
+   Fixed Slots  Flexible Slots
+       │           │
+       │      Compress / Shift
+       │           │
+       └─────┬─────┘
+             ▼
+       Updated Run-Sheet
+💡 Why ChronOps?
+Traditional event management often relies on a combination of:
+
+WhatsApp + Google Docs + Excel + Manual Calls
+ChronOps brings the operational workflow into one place:
+
+        PLAN
+         ↓
+      AI EXTRACT
+         ↓
+       ASSIGN
+         ↓
+      EXECUTE
+         ↓
+      MONITOR
+         ↓
+       REFLOW
+         ↓
+       DELIVER
+The goal is simple:
+
+When the plan changes, the system adapts with it.
+
+🚀 Getting Started
+Backend
+cd chronops-backend
+
+pip install -r requirements.txt
+
+uvicorn main:app --reload
+Backend will be available at:
+
+http://127.0.0.1:8000
+Frontend
+cd chronops-frontend
+
+npm install
+
+npm run dev
+The frontend will typically be available at:
+
+http://127.0.0.1:5173
+🔑 Environment Variables
+Create a .env file inside the backend:
+
+GEMINI_API_KEY=your_api_key_here
+Never commit API keys or .env files to GitHub.
+
+🧪 Core Modules
+ai_service.py
+Responsible for converting unstructured meeting text into structured task data using Gemini.
+
+reflow_engine.py
+Responsible for calculating schedule changes when sessions are delayed.
+
+models.py
+Defines the database entities for:
+
+Events
+
+Sessions
+
+Tasks
+
+Meeting notes
+
+main.py
+Connects the application components through FastAPI routes.
+
+🏆 Built For
+ChronOps can be used for:
+
+🎓 College festivals
+
+💻 Hackathons
+
+🎤 Conferences
+
+🎭 Cultural events
+
+🏢 Corporate events
+
+🏛️ Club operations
+
+🎪 Multi-stage events
+
+⚡ Core Idea
+ChronOps is not just an event planner.
+
+It is an execution engine designed to help organizers adapt when reality doesn't follow the plan.
+
+Plan less. React faster. Execute better.
+
+👥 Team
+Built with ❤️ during a 24-hour hackathon.
+
+ChronOps — Unified Event Command Center
+
+
+Add a prominent live demo link
+
+Yes. Put the live demo near the top, immediately after the project tagline, so judges/reviewers see it without scrolling.
+
+Use this section:
+
+ChronOps README
+⚡ ChronOps
+Unified Event Command Center
+AI-powered task management + real-time schedule reflow for seamless event execution.
+
+🚀 Live Demo
+👉 🔴 Launch ChronOps Live Demo →
+Try the command center:
+AI Meeting Notes → Task Extraction → Kanban → Live Run-Sheet → +15m Delay → Automatic Schedule Reflow
+
+ChronOps is an all-in-one event operations platform built for fast-moving clubs, hackathons, conferences, and live events.
+
+It combines AI-powered meeting intelligence with a real-time schedule reflow engine, helping organizers turn messy discussions into actionable tasks and keep events running even when schedules fall behind.
+
+Replace YOUR_LIVE_DEMO_URL with your deployed frontend URL, for example:
+
+https://chronops.vercel.app
+If you also have a deployed backend/API, you can add:
+
+| 🌐 Frontend | [Launch Demo](https://your-frontend-url.com) |
+| ⚡ Backend | [API](https://your-backend-url.com) |
+| 📖 API Docs | [Swagger](https://your-backend-url.com/docs) |
+For a hackathon README, I'd keep the big Live Demo button at the top and put API/GitHub links underneath it.
+
+
+
+
+Ad
+
+make md file
+
+Done. I created the complete Markdown README with the prominent Live Demo section at the top.
+
+
+Just replace YOUR_LIVE_DEMO_URL with your actual deployed frontend URL. 
+
+
+
+ChronOps_README.md
+
+
+⚡ ChronOps
+Unified Event Command Center
+AI-powered task management + real-time schedule reflow for seamless event execution.
+
+🚀 Live Demo
+👉 🔴 Launch ChronOps Live Demo →
+Try the command center:
+AI Meeting Notes → Task Extraction → Kanban → Live Run-Sheet → +15m Delay → Automatic Schedule Reflow
+
+ChronOps is an all-in-one event operations platform built for fast-moving clubs, hackathons, conferences, and live events.
+
+It combines AI-powered meeting intelligence with a real-time schedule reflow engine, helping organizers turn messy discussions into actionable tasks and keep events running even when schedules fall behind.
+
+🎯 The Problem
+Event operations often break down because of two recurring problems:
+
+📝 Meeting decisions get lost
+Unstructured meeting notes make it difficult to identify tasks, assign responsibilities, and track deadlines.
+
+⏱️ Live schedules are fragile
+When a session runs over time, organizers have to manually recalculate the remaining schedule, creating delays and communication chaos.
+
+ChronOps solves both.
+Meeting → AI → Tasks → Execution → Real-time Reflow
+
+🚀 Key Features
+🤖 1. AI Meeting Note Ingestion
+Turn messy meeting discussions into structured, actionable tasks.
+
+Organizers can paste raw meeting notes or transcripts into ChronOps. Using Google Gemini 2.5 Flash, the system automatically extracts:
+
+📌 Task title
+
+👤 Assignee
+
+📅 Deadline
+
+🗂️ Structured task information
+
+The extracted tasks are automatically stored in the database and displayed on the Kanban board.
+
+Example
+Meeting:
+"Rahul will handle the stage setup before 5 PM.
+Priya will contact the speakers by tomorrow."
+
+              ↓ Gemini AI
+
+┌─────────────────────────────────────┐
+│ Stage Setup                         │
+│ Assignee: Rahul                     │
+│ Deadline: 5:00 PM                   │
+├─────────────────────────────────────┤
+│ Contact Speakers                    │
+│ Assignee: Priya                     │
+│ Deadline: Tomorrow                  │
+└─────────────────────────────────────┘
+⏱️ 2. Dynamic Time-Reflow Engine
+Live events rarely follow the original schedule.
+
+ChronOps automatically recalculates the run-sheet when delays occur.
+
+🔒 Fixed Slots
+Critical sessions that cannot move.
+
+Examples:
+
+Keynote
+
+Guest appearance
+
+External speaker
+
+Venue booking constraint
+
+🔄 Flexible Slots
+Sessions that can automatically absorb delays.
+
+Examples:
+
+Panel discussions
+
+Q&A
+
+Breaks
+
+Internal sessions
+
+Example
+ORIGINAL SCHEDULE
+
+10:00  Opening
+10:30  Keynote        🔒 Fixed
+11:30  Panel          🔄 Flexible
+12:15  Q&A            🔄 Flexible
+12:45  Lunch          🔄 Flexible
+
+
+              +15 MIN DELAY
+                    ↓
+
+
+REFLOWED SCHEDULE
+
+10:15  Opening
+10:45  Keynote        🔒 Fixed
+11:30  Panel          🔄 Compressed
+12:15  Q&A            🔄 Flexible
+12:45  Lunch          🔄 Flexible
+Organizers can simulate this directly from the dashboard using the:
+
++15m Delay Simulator
+No manual recalculation.
+No spreadsheet chaos.
+Just an updated run-sheet.
+
+🖥️ 3. Unified Command Center
+ChronOps provides a single dashboard for both planning and execution.
+
+Run-Sheet View
+Monitor the live event timeline and immediately see:
+
+Current session
+
+Upcoming sessions
+
+Delays
+
+Fixed constraints
+
+Reflowed timings
+
+Kanban View
+Track operational tasks using a simple workflow:
+
+┌──────────────┬──────────────┬──────────────┐
+│ TODO         │ IN PROGRESS  │ DONE         │
+├──────────────┼──────────────┼──────────────┤
+│ Stage Setup  │ Speaker Call │ Registration │
+│ AV Check     │ Banner       │ Volunteers   │
+│ Guest Kit    │              │              │
+└──────────────┴──────────────┴──────────────┘
+🏗️ Architecture
+                 ┌──────────────────────┐
+                 │      React UI        │
+                 │ Vite + Tailwind CSS  │
+                 └──────────┬───────────┘
+                            │
+                         REST API
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │       FastAPI        │
+                 │      Backend         │
+                 └───────┬───────┬──────┘
+                         │       │
+             ┌───────────┘       └────────────┐
+             ▼                                ▼
+     ┌────────────────┐              ┌─────────────────┐
+     │    SQLite      │              │   Gemini AI     │
+     │   Database     │              │  2.5 Flash      │
+     └────────────────┘              └─────────────────┘
+             │
+             ▼
+     ┌────────────────┐
+     │ Reflow Engine  │
+     │ Delay Handling │
+     └────────────────┘
+🛠️ Tech Stack
+Layer	Technology
+🎨 Frontend	React, Vite
+💅 Styling	Tailwind CSS
+🎯 Icons	Lucide React
+🔌 API	FastAPI
+🐍 Backend	Python
+🗄️ Database	SQLite
+🧩 ORM	SQLAlchemy
+🤖 AI	Google Gemini 2.5 Flash
+📡 HTTP Client	Axios
+🚀 Server	Uvicorn
+📂 Project Structure
+Vertex_PS-3_ClubOpsAI/
+│
+├── chronops-backend/
+│   │
+│   ├── main.py
+│   │   ├── FastAPI entrypoint
+│   │   ├── API routes
+│   │   └── Database initialization
+│   │
+│   ├── database.py
+│   │   └── SQLAlchemy + SQLite configuration
+│   │
+│   ├── models.py
+│   │   └── Database models
+│   │
+│   ├── ai_service.py
+│   │   └── Gemini AI integration
+│   │
+│   ├── reflow_engine.py
+│   │   └── Schedule delay & compression logic
+│   │
+│   └── chronops.db
+│       └── SQLite database
+│
+└── chronops-frontend/
+    │
+    ├── src/
+    │   └── App.jsx
+    │       └── Main dashboard
+    │
+    ├── package.json
+    └── tailwind.config.js
+⚙️ How ChronOps Works
+          MEETING
+             │
+             ▼
+      Meeting Notes
+             │
+             ▼
+        Gemini AI
+             │
+             ▼
+     Structured Tasks
+             │
+             ▼
+       ┌───────────┐
+       │  Kanban   │
+       │  Board    │
+       └───────────┘
+
+
+        LIVE EVENT
+             │
+             ▼
+       Session Delay
+             │
+             ▼
+      Reflow Engine
+             │
+       ┌─────┴─────┐
+       ▼           ▼
+   Fixed Slots  Flexible Slots
+       │           │
+       │      Compress / Shift
+       │           │
+       └─────┬─────┘
+             ▼
+       Updated Run-Sheet
+💡 Why ChronOps?
+Traditional event management often relies on a combination of:
+
+WhatsApp + Google Docs + Excel + Manual Calls
+ChronOps brings the operational workflow into one place:
+
+        PLAN
+         ↓
+      AI EXTRACT
+         ↓
+       ASSIGN
+         ↓
+      EXECUTE
+         ↓
+      MONITOR
+         ↓
+       REFLOW
+         ↓
+       DELIVER
+The goal is simple:
+
+When the plan changes, the system adapts with it.
+
+🚀 Getting Started
+Backend
+cd chronops-backend
+
+pip install -r requirements.txt
+
+uvicorn main:app --reload
+Backend will be available at:
+
+http://127.0.0.1:8000
+Frontend
+cd chronops-frontend
+
+npm install
+
+npm run dev
+The frontend will typically be available at:
+
+http://127.0.0.1:5173
+🔑 Environment Variables
+Create a .env file inside the backend:
+
+GEMINI_API_KEY=your_api_key_here
+Never commit API keys or .env files to GitHub.
+
+🧪 Core Modules
+ai_service.py
+Responsible for converting unstructured meeting text into structured task data using Gemini.
+
+reflow_engine.py
+Responsible for calculating schedule changes when sessions are delayed.
+
+models.py
+Defines the database entities for:
+
+Events
+
+Sessions
+
+Tasks
+
+Meeting notes
+
+main.py
+Connects the application components through FastAPI routes.
+
+🏆 Built For
+ChronOps can be used for:
+
+🎓 College festivals
+
+💻 Hackathons
+
+🎤 Conferences
+
+🎭 Cultural events
+
+🏢 Corporate events
+
+🏛️ Club operations
+
+🎪 Multi-stage events
+
+⚡ Core Idea
+ChronOps is not just an event planner.
+
+It is an execution engine designed to help organizers adapt when reality doesn't follow the plan.
+
+Plan less. React faster. Execute better.
+
+👥 Team
+Built with ❤️ during a 24-hour hackathon.
+
+ChronOps — Unified Event Command Center
 
