@@ -195,7 +195,7 @@ export default function QuickAITools() {
             Quick AI Tools
           </span>
           <Badge color="muted" className="!text-[9px] !px-1.5 !py-0 !border">
-            Gemini Flash
+            POWERED BY AI
           </Badge>
         </div>
       }

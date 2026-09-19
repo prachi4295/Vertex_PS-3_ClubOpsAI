@@ -2,13 +2,10 @@ import { useState } from "react";
 import {
   Database,
   RefreshCw,
-  ChevronDown,
-  ChevronUp,
   UserCheck,
   CheckCircle2,
   Clock,
   AlertTriangle,
-  Code2,
   Calendar,
   Sparkles,
 } from "lucide-react";
@@ -27,8 +24,6 @@ export default function DebugDataPanel() {
   const { sessions, loading: sessionsLoading } = useSessions(DEMO_EVENT_ID);
   const { addNotification } = useNotifications();
 
-  const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
   const [reseeding, setReseeding] = useState(false);
 
   const handleResetData = async () => {
@@ -104,21 +99,11 @@ export default function DebugDataPanel() {
               <RefreshCw size={14} strokeWidth={3} className={reseeding ? "animate-spin" : ""} />
               <span>{reseeding ? "Re-seeding..." : "Reset Demo Data"}</span>
             </button>
-
-            {/* Toggle Expand View */}
-            <button
-              type="button"
-              onClick={() => setIsOpen((prev) => !prev)}
-              className="h-10 px-3 bg-neo-bg text-neo-ink border-3 border-neo-ink font-bold text-xs uppercase shadow-neo-sm hover:bg-neo-white transition-all duration-100 flex items-center gap-1 cursor-pointer"
-            >
-              <span>{isOpen ? "Hide Raw Data" : "Inspect Raw Data"}</span>
-              {isOpen ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} strokeWidth={3} />}
-            </button>
           </div>
         </div>
 
         {/* Live Metrics Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-4 border-b-4 border-neo-ink/10">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
           <div className="p-3 bg-neo-bg border-3 border-neo-ink shadow-[2px_2px_0_#000]">
             <div className="text-[10px] font-black text-neo-ink/60 uppercase">Active Event</div>
             <div className="font-black text-sm text-neo-ink truncate mt-0.5">
@@ -159,92 +144,6 @@ export default function DebugDataPanel() {
             </div>
           </div>
         </div>
-
-        {/* Collapsible Raw JSON Data Inspector */}
-        {isOpen && (
-          <div className="pt-4">
-            {/* Tab navigation */}
-            <div className="flex gap-2 mb-3 border-b-2 border-neo-ink pb-2 overflow-x-auto">
-              {[
-                { id: "overview", label: "Overview Summary" },
-                { id: "tasks", label: `Tasks (${tasks.length})` },
-                { id: "sessions", label: `Sessions (${sessions.length})` },
-                { id: "event", label: "Event Meta" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={[
-                    "px-3 py-1.5 font-black text-xs uppercase tracking-wider border-2 border-neo-ink cursor-pointer transition-all",
-                    activeTab === tab.id
-                      ? "bg-neo-ink text-neo-white shadow-[2px_2px_0_#FFD93D]"
-                      : "bg-neo-bg text-neo-ink hover:bg-neo-white",
-                  ].join(" ")}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab: Overview */}
-            {activeTab === "overview" && (
-              <div className="space-y-3">
-                <div className="bg-neo-bg border-3 border-neo-ink p-4 text-xs font-bold font-mono">
-                  <div className="text-neo-ink/60 font-black mb-2 uppercase">Data Verification Checklist:</div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-neo-ink font-black">✓ Sign-in works:</span>
-                      <span>{user ? `Authenticated as "${user.displayName}" (${user.isAnonymous ? "Demo" : "Google"})` : "Not signed in"}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-neo-ink font-black">✓ Seeding creates HackGenesis 2026:</span>
-                      <span>Event ID "{event?.id || DEMO_EVENT_ID}" status: {event?.status || "active"}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-neo-ink font-black">✓ Tasks count:</span>
-                      <span>{tasks.length} tasks across backlog/todo/in_progress/done ({overdueCount} overdue, {unassignedCount} unassigned)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-neo-ink font-black">✓ Sessions count:</span>
-                      <span>{sessions.length} sessions ({fixedSessionsCount} fixed: Inauguration, Lunch, Closing; Phonetic guide e.g. "Dr. GOOP-ta")</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-neo-ink font-black">✓ Real-time & Refresh:</span>
-                      <span>Synced via onSnapshot; persists across browser refresh.</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Tab: Tasks JSON */}
-            {activeTab === "tasks" && (
-              <div>
-                <pre className="bg-neo-ink text-[#A5F3FC] p-4 border-3 border-neo-ink font-mono text-xs overflow-x-auto max-h-96 shadow-inner">
-                  {JSON.stringify(tasks, null, 2)}
-                </pre>
-              </div>
-            )}
-
-            {/* Tab: Sessions JSON */}
-            {activeTab === "sessions" && (
-              <div>
-                <pre className="bg-neo-ink text-[#FDE047] p-4 border-3 border-neo-ink font-mono text-xs overflow-x-auto max-h-96 shadow-inner">
-                  {JSON.stringify(sessions, null, 2)}
-                </pre>
-              </div>
-            )}
-
-            {/* Tab: Event Meta JSON */}
-            {activeTab === "event" && (
-              <div>
-                <pre className="bg-neo-ink text-[#86EFAC] p-4 border-3 border-neo-ink font-mono text-xs overflow-x-auto max-h-96 shadow-inner">
-                  {JSON.stringify(event, null, 2)}
-                </pre>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

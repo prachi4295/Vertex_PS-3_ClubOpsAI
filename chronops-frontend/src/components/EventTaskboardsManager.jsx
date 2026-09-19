@@ -412,7 +412,7 @@ function EventCardItem({ event, onOpen, onDelete }) {
         </div>
 
         {event.tagline && (
-          <p className="text-xs font-bold text-neo-ink/70 line-clamp-1 uppercase">
+          <p className="text-xs font-bold text-neo-ink/70 uppercase">
             {event.tagline}
           </p>
         )}

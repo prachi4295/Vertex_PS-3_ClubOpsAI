@@ -28,9 +28,6 @@ export default function SubHeader() {
           >
             {title}
           </h1>
-          <Badge color="secondary" rotate className="hidden sm:inline-flex">
-            HackGenesis 2026
-          </Badge>
         </div>
 
         {/* Spacer */}

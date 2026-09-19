@@ -356,7 +356,7 @@ export default function IntelligenceCard() {
               Club Intelligence
             </span>
             <Badge color="muted" className="!text-[9px] !px-2 !py-0 !border-2">
-              Gemini AI
+              POWERED BY AI
             </Badge>
           </span>
         }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Search,
   Plus,
@@ -28,9 +29,28 @@ export default function Header() {
   const { sessions, startSession } = useSessions();
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [stageModalOpen, setStageModalOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleTabClick = (targetMode) => {
+    setMode(targetMode);
+    if (location.pathname !== "/") {
+      navigate("/");
+    }
+  };
+
+  const handleBrandClick = () => {
+    setMode("operations");
+    if (location.pathname !== "/") {
+      navigate("/");
+    }
+  };
 
   const handleGoLive = async () => {
     goLive();
+    if (location.pathname !== "/") {
+      navigate("/");
+    }
     const upcoming = sessions
       .filter((s) => s.status === "upcoming")
       .sort(
@@ -48,28 +68,36 @@ export default function Header() {
       <header className="bg-neo-ink border-b-4 border-neo-ink sticky top-0 z-40">
         <div className="max-w-[1440px] mx-auto px-4 flex items-center h-14 gap-3">
           {/* ─── Brand ─── */}
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="bg-neo-accent border-4 border-neo-ink px-3 py-1 font-black text-sm tracking-tight text-neo-ink shadow-neo-sm">
+          <button
+            type="button"
+            onClick={handleBrandClick}
+            className="flex items-center gap-2 shrink-0 cursor-pointer border-0 bg-transparent p-0"
+            title="Return to ChronOpsAI Operations"
+          >
+            <span className="bg-neo-accent border-4 border-neo-ink px-3 py-1 font-black text-sm tracking-tight text-neo-ink shadow-neo-sm hover:shadow-neo transition-all active:translate-x-[1px] active:translate-y-[1px]">
               ChronOpsAI
             </span>
-          </div>
+          </button>
 
           {/* ─── Mode tabs ─── */}
           <nav className="hidden md:flex items-center ml-4 gap-1" role="tablist" aria-label="App mode">
             <ModeTab
               label="Operations"
-              active={mode === "operations"}
-              onClick={() => setMode("operations")}
+              active={location.pathname === "/" && mode === "operations"}
+              onClick={() => handleTabClick("operations")}
             />
             <ModeTab
               label="Event Directory"
-              active={mode === "tasks"}
-              onClick={() => setMode("tasks")}
+              active={
+                (location.pathname === "/" && mode === "tasks") ||
+                location.pathname.startsWith("/taskboards/")
+              }
+              onClick={() => handleTabClick("tasks")}
             />
             <ModeTab
               label="Live Stage"
-              active={mode === "live"}
-              onClick={() => setMode("live")}
+              active={location.pathname === "/" && mode === "live"}
+              onClick={() => handleTabClick("live")}
             />
           </nav>
 
@@ -238,18 +266,21 @@ export default function Header() {
         <div className="md:hidden flex border-t-2 border-neo-ink/20">
           <MobileHeaderTab
             label="Operations"
-            active={mode === "operations"}
-            onClick={() => setMode("operations")}
+            active={location.pathname === "/" && mode === "operations"}
+            onClick={() => handleTabClick("operations")}
           />
           <MobileHeaderTab
             label="Event Directory"
-            active={mode === "tasks"}
-            onClick={() => setMode("tasks")}
+            active={
+              (location.pathname === "/" && mode === "tasks") ||
+              location.pathname.startsWith("/taskboards/")
+            }
+            onClick={() => handleTabClick("tasks")}
           />
           <MobileHeaderTab
             label="Live Stage"
-            active={mode === "live"}
-            onClick={() => setMode("live")}
+            active={location.pathname === "/" && mode === "live"}
+            onClick={() => handleTabClick("live")}
           />
           <button
             onClick={handleGoLive}

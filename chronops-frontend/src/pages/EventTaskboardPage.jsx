@@ -1,10 +1,10 @@
 import { useState, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
+  ArrowLeft,
   Calendar,
   MapPin,
   Columns3,
-  Plus,
   Star,
   CheckCircle2,
   Clock,
@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import Header from "../components/Header";
 import KanbanBoard from "../components/KanbanBoard";
-import TaskModal from "../components/TaskModal";
 import { Badge, Modal } from "../components/ui";
 import Button from "../components/ui/Button";
 import { INITIAL_EVENTS } from "../data/multiEvents";
@@ -31,7 +30,6 @@ export default function EventTaskboardPage() {
   const { eventId } = useParams();
   const navigate = useNavigate();
   const { goTasks } = useApp();
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Retrieve event metadata from storage or presets
@@ -115,11 +113,12 @@ export default function EventTaskboardPage() {
             type="button"
             onClick={handleBackToDirectory}
             className={[
-              "inline-flex items-center px-4 py-2 bg-neo-white text-neo-ink border-3 border-neo-ink font-black text-xs uppercase tracking-wider",
+              "inline-flex items-center gap-2 px-4 py-2 bg-neo-white text-neo-ink border-3 border-neo-ink font-black text-xs uppercase tracking-wider",
               "shadow-neo-sm hover:shadow-neo hover:bg-neo-bg transition-all duration-100 ease-linear cursor-pointer",
               "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
             ].join(" ")}
           >
+            <ArrowLeft size={16} strokeWidth={3} />
             <span>Back to Event Directory</span>
           </button>
 
@@ -173,26 +172,10 @@ export default function EventTaskboardPage() {
             )}
           </div>
 
-          {/* Quick Metrics & Add Task */}
+          {/* Quick Metrics & Actions */}
           <div className="flex flex-wrap items-center gap-4 sm:gap-6 shrink-0">
-            {/* Status Breakdown Pills */}
-            <div className="flex items-center gap-2 text-xs font-black uppercase">
-              <span className="bg-neo-muted border-2 border-neo-ink px-2.5 py-1 shadow-[2px_2px_0_#000]">
-                {stats.backlog} Backlog
-              </span>
-              <span className="bg-neo-white border-2 border-neo-ink px-2.5 py-1 shadow-[2px_2px_0_#000]">
-                {stats.todo} To Do
-              </span>
-              <span className="bg-neo-secondary border-2 border-neo-ink px-2.5 py-1 shadow-[2px_2px_0_#000]">
-                {stats.inProgress} In Progress
-              </span>
-              <span className="bg-neo-ink text-neo-white border-2 border-neo-ink px-2.5 py-1 shadow-[2px_2px_0_#000]">
-                {stats.done} Done
-              </span>
-            </div>
-
             {/* Progress Gauge */}
-            <div className="w-32 hidden lg:block">
+            <div className="w-32 hidden sm:block">
               <div className="flex justify-between items-center text-[10px] font-black uppercase mb-1">
                 <span>Completed</span>
                 <span>{stats.completionRate}%</span>
@@ -217,17 +200,6 @@ export default function EventTaskboardPage() {
               <Trash2 size={16} strokeWidth={2.5} />
               <span className="hidden sm:inline">Delete Board</span>
             </Button>
-
-            {/* Add Task Button */}
-            <Button
-              variant="primary"
-              size="md"
-              onClick={() => setTaskModalOpen(true)}
-              className="!h-10 !text-xs !px-4 shadow-[2px_2px_0_#000]"
-            >
-              <Plus size={16} strokeWidth={3} />
-              Add Task
-            </Button>
           </div>
         </div>
 
@@ -239,14 +211,6 @@ export default function EventTaskboardPage() {
           />
         </div>
       </main>
-
-      {/* Task Modal for adding tasks directly to this board */}
-      <TaskModal
-        open={taskModalOpen}
-        onClose={() => setTaskModalOpen(false)}
-        task={null}
-        eventId={eventId}
-      />
 
       {/* Delete Taskboard Confirmation Modal */}
       <Modal
