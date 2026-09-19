@@ -25,6 +25,7 @@ import {
   addTasksBatchToEvent,
   deleteTasksBatchFromEvent,
 } from "../hooks/useTasks";
+import { useNotifications } from "../hooks/useNotifications";
 import {
   extractTasksFromNotes,
   formatGeminiError,
