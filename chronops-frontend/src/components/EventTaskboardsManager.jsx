@@ -9,6 +9,8 @@ import {
   Sparkles,
   Layers,
   ExternalLink,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { Badge, Modal, Input } from "./ui";
 import Button from "./ui/Button";
@@ -37,6 +39,7 @@ export default function EventTaskboardsManager() {
   });
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [deleteEventTarget, setDeleteEventTarget] = useState(null);
   const [newEventForm, setNewEventForm] = useState({
     name: "",
     category: "Hackathon",
@@ -54,6 +57,18 @@ export default function EventTaskboardsManager() {
     } catch (e) {
       console.warn("Could not save events list:", e);
     }
+  };
+
+  const handleConfirmDeleteEvent = () => {
+    if (!deleteEventTarget) return;
+    const updated = events.filter((e) => e.id !== deleteEventTarget.id);
+    saveEvents(updated);
+    try {
+      localStorage.removeItem(`clubops_tasks_${deleteEventTarget.id}`);
+    } catch (e) {
+      console.warn("Failed to remove event tasks:", e);
+    }
+    setDeleteEventTarget(null);
   };
 
   // Filter events by global search
@@ -169,6 +184,7 @@ export default function EventTaskboardsManager() {
               key={event.id}
               event={event}
               onOpen={() => navigate(`/taskboards/${event.id}`)}
+              onDelete={() => setDeleteEventTarget(event)}
             />
           ))
         )}
@@ -294,6 +310,42 @@ export default function EventTaskboardsManager() {
           </div>
         </form>
       </Modal>
+
+      {/* ─── Delete Taskboard Confirmation Modal ─── */}
+      <Modal
+        open={Boolean(deleteEventTarget)}
+        onClose={() => setDeleteEventTarget(null)}
+        title="Delete Event Taskboard"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-3 bg-neo-accent/20 border-3 border-neo-accent">
+            <AlertTriangle size={20} strokeWidth={3} className="text-neo-ink shrink-0 mt-0.5" />
+            <div className="text-xs font-bold text-neo-ink uppercase leading-relaxed">
+              Are you sure you want to delete the <span className="font-black underline">{deleteEventTarget?.name}</span> taskboard? This will remove the board and all of its tasks from the directory.
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t-2 border-neo-ink/20">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteEventTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleConfirmDeleteEvent}
+              className="!bg-neo-accent !border-2"
+            >
+              <Trash2 size={15} strokeWidth={3} />
+              Yes, Delete Taskboard
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -303,7 +355,7 @@ export default function EventTaskboardsManager() {
  * Renders an event summary card with live task statistics.
  * Clicking navigates directly to the event's dedicated webpage.
  */
-function EventCardItem({ event, onOpen }) {
+function EventCardItem({ event, onOpen, onDelete }) {
   const { tasks } = useTasks(event.id);
 
   // Compute live statistics for this board
@@ -409,6 +461,24 @@ function EventCardItem({ event, onOpen }) {
             />
           </div>
         </div>
+
+        {/* Delete Taskboard CTA */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          title={`Delete ${event.name} taskboard`}
+          aria-label={`Delete ${event.name} taskboard`}
+          className={[
+            "h-10 w-10 bg-neo-white text-neo-ink border-3 border-neo-ink font-black",
+            "flex items-center justify-center cursor-pointer shadow-neo-sm hover:shadow-neo hover:bg-neo-accent",
+            "transition-all duration-100 ease-linear active:translate-x-[1px] active:translate-y-[1px] active:shadow-none",
+          ].join(" ")}
+        >
+          <Trash2 size={16} strokeWidth={2.5} />
+        </button>
 
         {/* Open Webpage CTA Button */}
         <button

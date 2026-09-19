@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
-  ArrowLeft,
   Calendar,
   MapPin,
   Columns3,
@@ -10,11 +9,13 @@ import {
   CheckCircle2,
   Clock,
   Sparkles,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import Header from "../components/Header";
 import KanbanBoard from "../components/KanbanBoard";
 import TaskModal from "../components/TaskModal";
-import { Badge } from "../components/ui";
+import { Badge, Modal } from "../components/ui";
 import Button from "../components/ui/Button";
 import { INITIAL_EVENTS } from "../data/multiEvents";
 import { useTasks } from "../hooks/useTasks";
@@ -31,6 +32,7 @@ export default function EventTaskboardPage() {
   const navigate = useNavigate();
   const { goTasks } = useApp();
   const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Retrieve event metadata from storage or presets
   const event = useMemo(() => {
@@ -78,6 +80,21 @@ export default function EventTaskboardPage() {
     navigate("/");
   };
 
+  const handleDeleteBoard = () => {
+    try {
+      const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
+      const list = saved ? JSON.parse(saved) : INITIAL_EVENTS;
+      const updated = list.filter((e) => e.id !== eventId);
+      localStorage.setItem(LOCAL_EVENTS_STORAGE_KEY, JSON.stringify(updated));
+      localStorage.removeItem(`clubops_tasks_${eventId}`);
+    } catch (e) {
+      console.warn("Failed to delete event board:", e);
+    }
+    setDeleteConfirmOpen(false);
+    goTasks();
+    navigate("/");
+  };
+
   return (
     <div className="min-h-screen bg-neo-bg relative">
       {/* Background textures */}
@@ -98,13 +115,12 @@ export default function EventTaskboardPage() {
             type="button"
             onClick={handleBackToDirectory}
             className={[
-              "inline-flex items-center gap-2 px-3.5 py-2 bg-neo-white text-neo-ink border-3 border-neo-ink font-black text-xs uppercase tracking-wider",
+              "inline-flex items-center px-4 py-2 bg-neo-white text-neo-ink border-3 border-neo-ink font-black text-xs uppercase tracking-wider",
               "shadow-neo-sm hover:shadow-neo hover:bg-neo-bg transition-all duration-100 ease-linear cursor-pointer",
               "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
             ].join(" ")}
           >
-            <ArrowLeft size={16} strokeWidth={3} />
-            <span>← Back to Event Directory</span>
+            <span>Back to Event Directory</span>
           </button>
 
           <div className="flex items-center gap-2">
@@ -189,6 +205,19 @@ export default function EventTaskboardPage() {
               </div>
             </div>
 
+            {/* Delete Taskboard Button */}
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => setDeleteConfirmOpen(true)}
+              className="!h-10 !text-xs !px-3 shadow-[2px_2px_0_#000] hover:!bg-neo-accent text-neo-ink"
+              title="Delete Taskboard"
+              aria-label="Delete this taskboard"
+            >
+              <Trash2 size={16} strokeWidth={2.5} />
+              <span className="hidden sm:inline">Delete Board</span>
+            </Button>
+
             {/* Add Task Button */}
             <Button
               variant="primary"
@@ -218,6 +247,42 @@ export default function EventTaskboardPage() {
         task={null}
         eventId={eventId}
       />
+
+      {/* Delete Taskboard Confirmation Modal */}
+      <Modal
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        title="Delete Event Taskboard"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-3 bg-neo-accent/20 border-3 border-neo-accent">
+            <AlertTriangle size={20} strokeWidth={3} className="text-neo-ink shrink-0 mt-0.5" />
+            <div className="text-xs font-bold text-neo-ink uppercase leading-relaxed">
+              Are you sure you want to delete the <span className="font-black underline">{event.name}</span> taskboard? This will remove the board and all of its tasks from your directory.
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t-2 border-neo-ink/20">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteConfirmOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleDeleteBoard}
+              className="!bg-neo-accent !border-2"
+            >
+              <Trash2 size={15} strokeWidth={3} />
+              Yes, Delete Taskboard
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

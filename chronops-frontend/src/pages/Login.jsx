@@ -57,7 +57,7 @@ export default function Login() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 bg-neo-ink text-neo-white px-3 py-1 font-black tracking-wider text-sm border-2 border-neo-ink">
             <span className="w-2.5 h-2.5 bg-neo-accent rounded-full animate-pulse" />
-            CLUBOPS STUDIO
+            ChronOpsAI
           </div>
           <Badge color="secondary" rotate className="hidden sm:inline-flex !text-[10px]">
             v2.4
@@ -66,9 +66,6 @@ export default function Login() {
 
         <div className="flex items-center gap-2">
           <Star size={16} strokeWidth={3} className="text-neo-secondary animate-spin-slow" />
-          <Badge color="muted" className="!text-[10px]">
-            Antigravity
-          </Badge>
         </div>
       </header>
 
@@ -239,7 +236,7 @@ export default function Login() {
 
       {/* ─── Footer ─── */}
       <footer className="relative z-10 w-full border-t-4 border-neo-ink bg-neo-white px-6 py-3 flex items-center justify-between text-xs font-black uppercase text-neo-ink tracking-wider">
-        <span>ClubOps Studio • HackGenesis 2026</span>
+        <span>ChronOpsAI • HackGenesis 2026</span>
         <span>Firebase Auth & Firestore</span>
       </footer>
     </div>

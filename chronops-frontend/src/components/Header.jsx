@@ -50,11 +50,8 @@ export default function Header() {
           {/* ─── Brand ─── */}
           <div className="flex items-center gap-2 shrink-0">
             <span className="bg-neo-accent border-4 border-neo-ink px-3 py-1 font-black text-sm tracking-tight text-neo-ink shadow-neo-sm">
-              CLUBOPS STUDIO
+              ChronOpsAI
             </span>
-            <Badge color="muted" className="hidden sm:inline-flex !text-[10px] !px-2 !py-0.5 !border-2">
-              Antigravity
-            </Badge>
           </div>
 
           {/* ─── Mode tabs ─── */}
@@ -65,7 +62,7 @@ export default function Header() {
               onClick={() => setMode("operations")}
             />
             <ModeTab
-              label="Task Board"
+              label="Event Directory"
               active={mode === "tasks"}
               onClick={() => setMode("tasks")}
             />
@@ -245,7 +242,7 @@ export default function Header() {
             onClick={() => setMode("operations")}
           />
           <MobileHeaderTab
-            label="Task Board"
+            label="Event Directory"
             active={mode === "tasks"}
             onClick={() => setMode("tasks")}
           />
