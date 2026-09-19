@@ -10,80 +10,128 @@ import {
   deleteDoc,
   Timestamp,
 } from "firebase/firestore";
-import { db } from "../services/firebase";
-import { DEMO_EVENT_ID, SEED_TASKS } from "../data/seed";
+import { db, isFirebaseConfigured } from "../services/firebase";
+import {
+  DEMO_EVENT_ID,
+  SEED_TASKS,
+  LOCAL_TASKS_KEY,
+} from "../data/seed";
 
 const TasksContext = createContext(null);
 
 /**
- * Provides real-time task list from Firestore with CRUD helpers.
- * Falls back to seed data when Firebase is not configured.
+ * Loads tasks from localStorage or falls back to SEED_TASKS.
  */
-export function TasksProvider({ children }) {
+function getLocalTasks(eventId) {
+  try {
+    const raw = localStorage.getItem(`clubops_tasks_${eventId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return parsed.map((t) => ({
+        ...t,
+        dueDate: t.dueDate ? new Date(t.dueDate) : null,
+        createdAt: t.createdAt ? new Date(t.createdAt) : new Date(),
+        updatedAt: t.updatedAt ? new Date(t.updatedAt) : new Date(),
+      }));
+    }
+  } catch (e) {
+    console.warn("Failed to load local tasks:", e);
+  }
+  return SEED_TASKS.map((t, i) => ({
+    ...t,
+    id: t.id || `task-${i + 1}`,
+    dueDate: t.dueDate ? t.dueDate.toDate() : null,
+    createdAt: t.createdAt.toDate(),
+    updatedAt: t.updatedAt.toDate(),
+  }));
+}
+
+/**
+ * Saves tasks to localStorage.
+ */
+function saveLocalTasks(eventId, tasks) {
+  try {
+    const serialized = tasks.map((t) => ({
+      ...t,
+      dueDate: t.dueDate ? (t.dueDate instanceof Date ? t.dueDate.toISOString() : t.dueDate) : null,
+      createdAt: t.createdAt ? (t.createdAt instanceof Date ? t.createdAt.toISOString() : t.createdAt) : new Date().toISOString(),
+      updatedAt: t.updatedAt ? (t.updatedAt instanceof Date ? t.updatedAt.toISOString() : t.updatedAt) : new Date().toISOString(),
+    }));
+    localStorage.setItem(`clubops_tasks_${eventId}`, JSON.stringify(serialized));
+  } catch (e) {
+    console.warn("Failed to save local tasks:", e);
+  }
+}
+
+/**
+ * Core hook that manages tasks for a specific eventId via onSnapshot.
+ * Sorts client-side without combining where() and orderBy().
+ */
+export function useEventTasks(eventId = DEMO_EVENT_ID) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [usingLocal, setUsingLocal] = useState(false);
 
-  const eventId = DEMO_EVENT_ID;
+  // Sync state loader
+  const reloadFromLocal = useCallback(() => {
+    const localData = getLocalTasks(eventId);
+    // Sort client-side by createdAt
+    localData.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    setTasks(localData);
+    setLoading(false);
+  }, [eventId]);
 
-  // ─── Real-time listener (or local fallback) ───
   useEffect(() => {
-    // Check if Firebase is configured
-    const hasFirebase = import.meta.env.VITE_FIREBASE_API_KEY;
-
-    if (!hasFirebase) {
-      // Use local seed data as fallback
-      console.info("Firebase not configured — using local seed data.");
-      setUsingLocal(true);
-      setTasks(
-        SEED_TASKS.map((t, i) => ({
-          ...t,
-          id: `local-${i}`,
-          dueDate: t.dueDate ? t.dueDate.toDate() : null,
-          createdAt: t.createdAt.toDate(),
-          updatedAt: t.updatedAt.toDate(),
-        }))
-      );
+    if (!eventId) {
+      setTasks([]);
       setLoading(false);
       return;
     }
 
-    setLoading(true);
-    // Query by eventId only — no orderBy (avoids composite index requirement)
-    const q = query(
-      collection(db, "tasks"),
-      where("eventId", "==", eventId)
-    );
+    if (isFirebaseConfigured && db) {
+      setLoading(true);
+      // Query by eventId only — per spec: do not combine where() with orderBy()
+      const q = query(collection(db, "tasks"), where("eventId", "==", eventId));
 
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const docs = snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            ...data,
-            dueDate: data.dueDate?.toDate?.() ?? null,
-            createdAt: data.createdAt?.toDate?.() ?? new Date(),
-            updatedAt: data.updatedAt?.toDate?.() ?? new Date(),
-          };
-        });
-        // Sort client-side by createdAt
-        docs.sort((a, b) => a.createdAt - b.createdAt);
-        setTasks(docs);
-        setLoading(false);
-        setError(null);
-      },
-      (err) => {
-        console.error("Firestore tasks error:", err);
-        setError(err.message);
-        setLoading(false);
-      }
-    );
+      const unsub = onSnapshot(
+        q,
+        (snap) => {
+          const docs = snap.docs.map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+              dueDate: data.dueDate?.toDate?.() ?? (data.dueDate ? new Date(data.dueDate) : null),
+              createdAt: data.createdAt?.toDate?.() ?? (data.createdAt ? new Date(data.createdAt) : new Date()),
+              updatedAt: data.updatedAt?.toDate?.() ?? (data.updatedAt ? new Date(data.updatedAt) : new Date()),
+            };
+          });
 
-    return () => unsub();
-  }, [eventId]);
+          // Sort client-side by createdAt
+          docs.sort((a, b) => a.createdAt - b.createdAt);
+          setTasks(docs);
+          setLoading(false);
+          setError(null);
+        },
+        (err) => {
+          console.error("Firestore tasks error:", err);
+          setError(err.message);
+          reloadFromLocal();
+        }
+      );
+
+      return () => unsub();
+    } else {
+      // Local demo mode
+      reloadFromLocal();
+
+      const handleUpdate = () => {
+        reloadFromLocal();
+      };
+      window.addEventListener("clubops-data-updated", handleUpdate);
+      return () => window.removeEventListener("clubops-data-updated", handleUpdate);
+    }
+  }, [eventId, reloadFromLocal]);
 
   // ─── Add task ───
   const addTask = useCallback(
@@ -101,23 +149,27 @@ export function TasksProvider({ children }) {
         updatedAt: Timestamp.fromDate(now),
       };
 
-      if (usingLocal) {
-        setTasks((prev) => [
-          ...prev,
-          {
-            ...newTask,
-            id: `local-${Date.now()}`,
-            dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
-            createdAt: now,
-            updatedAt: now,
-          },
-        ]);
-        return;
+      if (!isFirebaseConfigured || !db) {
+        const localItem = {
+          ...newTask,
+          id: `task-${Date.now()}`,
+          dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
+          createdAt: now,
+          updatedAt: now,
+        };
+        setTasks((prev) => {
+          const updated = [...prev, localItem];
+          saveLocalTasks(eventId, updated);
+          return updated;
+        });
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+        return localItem;
       }
 
-      await addDoc(collection(db, "tasks"), newTask);
+      const docRef = await addDoc(collection(db, "tasks"), newTask);
+      return { id: docRef.id, ...newTask };
     },
-    [eventId, usingLocal]
+    [eventId]
   );
 
   // ─── Update task ───
@@ -134,9 +186,9 @@ export function TasksProvider({ children }) {
           : null;
       }
 
-      if (usingLocal) {
-        setTasks((prev) =>
-          prev.map((t) =>
+      if (!isFirebaseConfigured || !db) {
+        setTasks((prev) => {
+          const updated = prev.map((t) =>
             t.id === taskId
               ? {
                   ...t,
@@ -147,65 +199,100 @@ export function TasksProvider({ children }) {
                   updatedAt: now,
                 }
               : t
-          )
-        );
+          );
+          saveLocalTasks(eventId, updated);
+          return updated;
+        });
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
         return;
       }
 
       await updateDoc(doc(db, "tasks", taskId), firestoreUpdates);
     },
-    [usingLocal]
+    [eventId]
   );
 
   // ─── Delete task ───
   const deleteTask = useCallback(
     async (taskId) => {
-      if (usingLocal) {
-        setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      if (!isFirebaseConfigured || !db) {
+        setTasks((prev) => {
+          const updated = prev.filter((t) => t.id !== taskId);
+          saveLocalTasks(eventId, updated);
+          return updated;
+        });
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
         return;
       }
 
       await deleteDoc(doc(db, "tasks", taskId));
     },
-    [usingLocal]
+    [eventId]
   );
 
-  // ─── Move task (optimistic) ───
+  // ─── Move task (optimistic UI) ───
   const moveTask = useCallback(
     async (taskId, newStatus) => {
-      // Optimistic update
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId ? { ...t, status: newStatus, updatedAt: new Date() } : t
-        )
-      );
+      const now = new Date();
+      setTasks((prev) => {
+        const updated = prev.map((t) =>
+          t.id === taskId ? { ...t, status: newStatus, updatedAt: now } : t
+        );
+        if (!isFirebaseConfigured || !db) {
+          saveLocalTasks(eventId, updated);
+        }
+        return updated;
+      });
 
-      if (usingLocal) return;
+      if (!isFirebaseConfigured || !db) {
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+        return;
+      }
 
       try {
         await updateDoc(doc(db, "tasks", taskId), {
           status: newStatus,
-          updatedAt: Timestamp.fromDate(new Date()),
+          updatedAt: Timestamp.fromDate(now),
         });
       } catch (err) {
         console.error("Failed to persist task move:", err);
-        // Revert handled by onSnapshot re-sync
       }
     },
-    [usingLocal]
+    [eventId]
   );
 
+  return { tasks, loading, error, addTask, updateTask, deleteTask, moveTask };
+}
+
+/**
+ * Provider for app-wide tasks context.
+ */
+export function TasksProvider({ children, eventId = DEMO_EVENT_ID }) {
+  const taskState = useEventTasks(eventId);
   return (
-    <TasksContext.Provider
-      value={{ tasks, loading, error, addTask, updateTask, deleteTask, moveTask }}
-    >
+    <TasksContext.Provider value={taskState}>
       {children}
     </TasksContext.Provider>
   );
 }
 
-export function useTasks() {
+/**
+ * Hook to access tasks. Can be called with useTasks(eventId) or useTasks() inside provider.
+ */
+export function useTasks(customEventId) {
   const ctx = useContext(TasksContext);
-  if (!ctx) throw new Error("useTasks must be used within TasksProvider");
-  return ctx;
+  const standaloneState = useEventTasks(customEventId);
+
+  // If a custom eventId is passed, return the standalone hook state for that eventId
+  if (customEventId) {
+    return standaloneState;
+  }
+
+  // Otherwise, use the shared context if available
+  if (ctx) {
+    return ctx;
+  }
+
+  // Fallback to standalone default if outside provider
+  return standaloneState;
 }

@@ -7,6 +7,7 @@ import HealthRadar from "../components/HealthRadar";
 import KanbanBoard from "../components/KanbanBoard";
 import LiveFlowPreview from "../components/LiveFlowPreview";
 import QuickAITools from "../components/QuickAITools";
+import DebugDataPanel from "../components/DebugDataPanel";
 import { Badge } from "../components/ui";
 
 const MOBILE_TABS = [
@@ -120,6 +121,9 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        {/* ─── Temporary Debug & Live Reseed Bar ─── */}
+        <DebugDataPanel />
       </div>
     </div>
   );

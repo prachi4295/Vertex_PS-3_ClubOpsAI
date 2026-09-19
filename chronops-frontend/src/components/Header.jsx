@@ -15,12 +15,14 @@ import {
 import { Badge, Input, Dropdown } from "./ui";
 import { useApp } from "../hooks/useApp";
 import { useNotifications } from "../hooks/useNotifications";
+import { useAuth } from "../hooks/useAuth";
 import Button from "./ui/Button";
 import TaskModal from "./TaskModal";
 
 export default function Header() {
   const { mode, setMode, goLive, searchQuery, setSearchQuery } = useApp();
   const { notifications, markAllRead, unreadCount } = useNotifications();
+  const { user, signOutUser } = useAuth();
   const [taskModalOpen, setTaskModalOpen] = useState(false);
 
   return (
@@ -179,13 +181,32 @@ export default function Header() {
           <Dropdown
             align="right"
             trigger={
-              <span className="inline-flex items-center justify-center w-9 h-9 bg-neo-muted border-2 border-neo-ink shadow-[2px_2px_0_#000] rounded-full text-neo-ink font-black text-sm hover:shadow-neo-sm transition-all duration-100 ease-linear active:translate-x-[1px] active:translate-y-[1px] active:shadow-none">
-                P
-              </span>
+              user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || "User avatar"}
+                  className="w-9 h-9 border-2 border-neo-ink shadow-[2px_2px_0_#000] rounded-full object-cover cursor-pointer hover:shadow-neo-sm transition-all duration-100 ease-linear active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+                />
+              ) : (
+                <span
+                  title={user?.displayName || "Demo User"}
+                  className="inline-flex items-center justify-center w-9 h-9 bg-neo-muted border-2 border-neo-ink shadow-[2px_2px_0_#000] rounded-full text-neo-ink font-black text-sm hover:shadow-neo-sm transition-all duration-100 ease-linear active:translate-x-[1px] active:translate-y-[1px] active:shadow-none cursor-pointer"
+                >
+                  {(user?.displayName || "D").charAt(0).toUpperCase()}
+                </span>
+              )
             }
             items={[
-              { label: "Profile", icon: User, onClick: () => {} },
-              { label: "Sign Out", icon: LogOut, onClick: () => {} },
+              {
+                label: user?.displayName ? `${user.displayName.slice(0, 16)}` : "Profile",
+                icon: User,
+                onClick: () => {},
+              },
+              {
+                label: "Sign Out",
+                icon: LogOut,
+                onClick: () => signOutUser(),
+              },
             ]}
           />
         </div>
