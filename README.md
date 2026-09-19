@@ -1,26 +1,27 @@
-# ⚡ ClubOps Studio (ChronOps)
+# ⚡ ChronOpsAI
 > **Unified Event Command Center for Student Clubs & Hackathons**  
-> AI-powered task management + real-time schedule reflow for seamless event execution.  
-> Built with **React 19**, **Vite**, **Google Gemini**, **Firebase (Firestore & Auth)**, and designed with **Neo-brutalist aesthetics**.
+> AI-powered multi-event task management + real-time schedule reflow for seamless event execution.  
+> Built with **React 19**, **Vite**, **Google Gemini**, **Firebase (Firestore & Auth)**, and designed with strict **Neo-brutalist aesthetics**.
 
 ---
 
 ## 🌟 Overview
 
-ChronOps is an all-in-one event operations platform built for fast-moving clubs, hackathons, conferences, and live events.
-It features two core operating modes:
-1. **Operations Mode**: Turn raw meeting notes or voice transcripts into actionable Kanban tasks, monitor real-time event risk with the **Event Health Radar**, and organize tasks across Backlog, To Do, In Progress, and Done.
-2. **Live Stage Mode**: Full-screen confidence anchor view for MCs featuring live countdown timers, overrun tracking (turns accent red past zero), instant `+5m`/`+10m` schedule reflow, on-demand AI speaker intros, 60-second emergency filler scripts, and phonetic pronunciation guides.
+**ChronOpsAI** is an all-in-one event operations platform built for fast-moving clubs, hackathons, conferences, and live stages. It unifies high-tempo operations into three integrated modes:
+
+1. **Operations Mode**: Turn raw meeting notes or speech audio transcripts into actionable tasks with **Club Intelligence**, monitor real-time event slip risk with the **Event Health Radar**, and draft stage announcements with **Quick AI Tools**.
+2. **Event Directory Mode**: Manage multiple event taskboards simultaneously (*HackGenesis 2026*, *AI & Web3 Summit 2026*, *Club Orientation & Showcase*, or custom created events). Open dedicated full-page Kanban boards (`/taskboards/:eventId`) with drag-and-drop, priority filtering, subtasks, and taskboard deletion.
+3. **Live Stage Mode**: Full-screen confidence monitor for anchors and MCs featuring live countdown timers, overrun tracking (turns accent red past zero), instant `+5m`/`+10m` schedule reflow, on-demand AI speaker intros, 60-second emergency filler scripts, and phonetic pronunciation guides.
 
 ---
 
 ## 🎨 Design System: Strict Neo-Brutalism
 
 - **Zero gradients, zero blur, zero gray text**.
-- Hard contrast: `#FFFDF5` background, `#000000` text & thick borders (`border-2`, `border-3`, `border-4`).
-- Hard box shadows: `box-shadow: 4px 4px 0 #000`, `8px 8px 0 #000`.
-- Neo-brutalist palette:
-  - Cream: `#FFFDF5`
+- **High-contrast palette**: `#FFFDF5` background, `#000000` text & thick borders (`border-2`, `border-3`, `border-4`).
+- **Hard box shadows**: `box-shadow: 4px 4px 0 #000`, `8px 8px 0 #000`.
+- **Palette**:
+  - Cream Background: `#FFFDF5`
   - Onyx Black: `#000000`
   - Hot Coral (Overdue / Risk / Slip Warning / Overrun): `#FF6B6B`
   - Canary Yellow (In Progress / AI Badges): `#FFD93D`
@@ -31,7 +32,33 @@ It features two core operating modes:
 
 ---
 
+## 🚀 Quick Start (Running Locally)
+
+### 1. Clone & Navigate
+```bash
+git clone https://github.com/prachi4295/Vertex_PS-3_ClubOpsAI.git
+cd Vertex_PS-3_ClubOpsAI/chronops-frontend
+```
+
+### 2. Install Dependencies
+```bash
+npm install
+```
+
+### 3. Start Development Server
+```bash
+npm run dev
+```
+
+Open **[http://localhost:5173](http://localhost:5173)** in your browser.
+
+> **Instant Demo Access**: You do not need cloud credentials to explore! Click **"Continue as Demo"** or **"Continue with Google"** on the login screen to explore pre-seeded data in **Offline Demo Mode**.
+
+---
+
 ## 🔑 Environment Variables Setup
+
+For connecting your own Firebase backend and Google Gemini API key:
 
 In `chronops-frontend/`, copy `.env.example` to `.env`:
 
@@ -40,7 +67,7 @@ cd chronops-frontend
 cp .env.example .env
 ```
 
-Your `.env` file requires:
+Your `.env` file structure:
 
 ```ini
 # Firebase Configuration
@@ -53,10 +80,10 @@ VITE_FIREBASE_APP_ID=your_app_id
 
 # Google Gemini Configuration
 VITE_GEMINI_API_KEY=your_gemini_api_key
-VITE_GEMINI_MODEL=gemini-2.0-flash
+VITE_GEMINI_MODEL=gemini-2.5-flash
 ```
 
-> **Local Demo Fallback**: If Firebase or Gemini credentials are not supplied, ChronOps automatically operates in **Local Demo Mode** using in-memory / `localStorage` stores and built-in static template fallbacks, allowing full offline testing!
+> **Security Note**: `.env` is git-ignored by default to prevent leaking secrets to public repositories.
 
 ---
 
@@ -64,12 +91,12 @@ VITE_GEMINI_MODEL=gemini-2.0-flash
 
 ### 1. Create a Firebase Project
 1. Navigate to the [Firebase Console](https://console.firebase.google.com/) and click **Add Project**.
-2. Set your project name (e.g., `clubops-studio`) and create the project.
+2. Set your project name (e.g., `chronops-ai`) and create the project.
 
 ### 2. Enable Authentication
 1. Go to **Build > Authentication** > **Sign-in method**.
 2. Enable **Google** sign-in (set support email and save).
-3. Enable **Anonymous** sign-in (enables "Continue as demo" mode without logging into personal accounts).
+3. Enable **Anonymous** sign-in (allows instant demo access without credentials).
 
 ### 3. Create Cloud Firestore Database
 1. Go to **Build > Firestore Database** and click **Create Database**.
@@ -120,82 +147,20 @@ VITE_GEMINI_MODEL=gemini-2.0-flash
 
 > **Security & Best Practices**:  
 > Because frontend builds bundle `VITE_*` environment variables in client-side code, anyone inspecting browser network calls can view the key if left unrestricted.
->
-> Follow these two recommended tiers:
 
 #### Tier 1 (Immediate / Hackathon / Dev): Restrict Key by HTTP Referrer
 Lock down your API key in Google Cloud Console so it **only** executes requests originating from your authorized domains:
 1. Go to the [Google Cloud Console Credentials Page](https://console.cloud.google.com/apis/credentials).
-2. Select your Google Cloud / Firebase project.
-3. Click your **Gemini API Key** to open its settings.
-4. Under **Application restrictions**, select **Websites (HTTP referrers)**.
-5. Click **Add an Item** and enter your authorized URLs:
-   - `http://localhost:5173/*` (local development)
-   - `http://127.0.0.1:5173/*`
-   - `https://<your-project-id>.web.app/*` (your production Firebase domain)
-   - `https://<your-project-id>.firebaseapp.com/*`
-6. Under **API restrictions**, choose **Restrict key** and check **Generative Language API** (or Vertex AI API).
-7. Click **Save**. Any request originating from other websites or third-party tools will be rejected with `403 Forbidden`.
+2. Select your project and click your **Gemini API Key**.
+3. Under **Application restrictions**, select **Websites (HTTP referrers)**.
+4. Add your authorized URLs:
+   - `http://localhost:5173/*` (local dev)
+   - `https://<your-project-id>.web.app/*` (Firebase hosting)
+5. Under **API restrictions**, choose **Restrict key** and check **Generative Language API**.
+6. Click **Save**.
 
-#### Tier 2 (Production / Enterprise): Serverless Cloud Function Proxy
-For production deployments where you want zero API key exposure to the browser, route AI requests through Firebase Cloud Functions (2nd Gen):
-
-```
-┌─────────────────┐       Firebase Auth Token        ┌─────────────────────────┐       GEMINI_API_KEY        ┌──────────────┐
-│  React Frontend │ ───────────────────────────────> │  Firebase Cloud Function│ ──────────────────────────> │ Google Gemini│
-│ (ChronOps App)  │ <─────────────────────────────── │  (Node.js / onCall)     │ <────────────────────────── │   API / SDK  │
-└─────────────────┘        Structured JSON           └─────────────────────────┘      Generative Output      └──────────────┘
-```
-
-**Implementation Pattern**:
-1. Store the API key in Firebase Secret Manager:
-   ```bash
-   firebase functions:secrets:set GEMINI_API_KEY
-   ```
-2. Create an `onCall` function in `functions/index.js`:
-   ```javascript
-   const { onCall, HttpsError } = require("firebase-functions/v2/https");
-   const { defineSecret } = require("firebase-functions/params");
-   const { GoogleGenAI } = require("@google/genai");
-
-   const geminiSecret = defineSecret("GEMINI_API_KEY");
-
-   exports.extractTasks = onCall({ secrets: [geminiSecret] }, async (request) => {
-     // Verify user is authenticated
-     if (!request.auth) {
-       throw new HttpsError("unauthenticated", "Authentication required.");
-     }
-     const ai = new GoogleGenAI({ apiKey: geminiSecret.value() });
-     const response = await ai.models.generateContent({
-       model: "gemini-2.0-flash",
-       contents: request.data.notes,
-     });
-     return JSON.parse(response.text);
-   });
-   ```
-3. Call it securely from the frontend without any client-side API key:
-   ```javascript
-   import { getFunctions, httpsCallable } from "firebase/functions";
-   const functions = getFunctions();
-   const extractTasks = httpsCallable(functions, "extractTasks");
-   const result = await extractTasks({ notes: userNotes });
-   ```
-
----
-
-## 🚀 Running Locally
-
-```bash
-# Navigate to frontend directory
-cd chronops-frontend
-
-# Install dependencies
-npm install
-
-# Start Vite dev server
-npm run dev
-```
-Open `http://localhost:5173` in your browser.
+#### Tier 2 (Production): Serverless Cloud Function Proxy
+Route AI requests through Firebase Cloud Functions (2nd Gen) so the key stays completely server-side.
 
 ---
 
@@ -208,7 +173,7 @@ cd chronops-frontend
 npm test -- --run
 ```
 
-All 79 unit and component tests will run and pass synchronously.
+All **79 unit and component tests** pass synchronously across 10 test suites.
 
 ---
 
@@ -231,17 +196,18 @@ firebase deploy --only hosting,firestore:rules
 
 ---
 
-## 📋 Evaluation Checklist & Demo Flows
+## 📋 Features Walkthrough
 
-1. **Seed Demo Data**: Click **"Seed demo data"** in the bottom debug bar to populate "HackGenesis 2026" with 12 tasks across all 4 statuses and 10 sessions with realistic buffers.
-2. **AI Transcript Task Extraction**: In the **Club Intelligence** panel, paste meeting notes or click "Try sample transcript", then click **PROCESS WITH AI**. Tasks are parsed into JSON and batch-written into the Kanban Backlog with an Undo toast.
-3. **Interactive Kanban & Health Radar**: Drag cards between columns (or use card arrow buttons for keyboard/touch navigation). Notice the **Event Health Radar** (Task Completion %, Volunteer Allocation %, Risk Score) update dynamically in real time.
-4. **Schedule Reflow Engine**:
-   - In **Live Flow Preview**, click `+10m` on the live session.
-   - Subsequent flexible sessions shift back while buffer gaps absorb delay first.
-   - Fixed sessions (e.g., Inauguration, Lunch, Closing) remain anchored.
-   - Over-delaying triggers a high-visibility **Red Accent Slip Warning Banner** with explicit Confirm/Cancel protection.
-5. **Live Stage Confidence Monitor**:
-   - Tap **GO LIVE** in the header.
-   - Experience high-contrast typography, live countdown/overrun timer (counts up in red past zero), speaker bio, phonetic guides, and 1-click `+5m`/`+10m` delay adjustments.
-   - Use the hidden **Demo Controls** drawer to run the clock at `30x` or `60x` speed to simulate real-time stage progression.
+1. **Operations Mode**:
+   - **Club Intelligence**: Paste raw standup notes or record speech transcripts. The AI parses tasks, auto-detects the target event board (or prompts with an interactive selection modal), and batch-adds them with an Undo toast.
+   - **Event Health Radar**: Dynamic completion percentage, volunteer allocation ratio, and slip risk score.
+   - **Quick AI Tools**: Instant 1-minute MC filler speech generator, volunteer coordination email drafter, stage transition script generator, and speaker intro generator with fact-compliance checks.
+2. **Event Directory Mode**:
+   - Multi-event workspace (*HackGenesis 2026*, *AI & Web3 Summit 2026*, *Club Orientation & Showcase*, plus `+ New Event Board`).
+   - Click any card to navigate to its dedicated full-page Kanban board (`/taskboards/:eventId`).
+   - Manage tasks with drag-and-drop, status toggling, and priority filters.
+   - Delete event taskboards with a single confirmation click.
+3. **Live Stage Mode**:
+   - High-contrast countdown timer and real-time overrun tracker.
+   - `+5m` and `+10m` schedule reflow engine with automatic buffer compression and anchor session protection.
+   - Anchor scripts and speaker phonetic respelling guides.
