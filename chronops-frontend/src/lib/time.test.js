@@ -6,6 +6,8 @@ import {
   diffMinutes,
   calculateDelayMinutes,
   formatTimeRange,
+  detectTimingClashes,
+  resolveTimingClashes,
 } from "./time";
 
 describe("Time Utility Module (time.js)", () => {
@@ -66,6 +68,55 @@ describe("Time Utility Module (time.js)", () => {
   describe("formatTimeRange", () => {
     it("formats start and end times nicely", () => {
       expect(formatTimeRange("09:00", 45)).toBe("09:00 - 09:45");
+    });
+  });
+
+  describe("detectTimingClashes & resolveTimingClashes", () => {
+    const sampleSessions = [
+      {
+        id: "sess-1",
+        title: "Coffee Break & Team Mentor Matchmaking",
+        startTime: "11:10",
+        durationMinutes: 55, // ends at 12:05
+        status: "live",
+      },
+      {
+        id: "sess-2",
+        title: "Fireside Chat: From Hackathon to YC Series A",
+        startTime: "11:35",
+        durationMinutes: 55, // clashes by 30 mins!
+        status: "upcoming",
+      },
+      {
+        id: "sess-3",
+        title: "Lunch & Networking",
+        startTime: "12:35",
+        durationMinutes: 60,
+        status: "upcoming",
+      },
+    ];
+
+    it("detects timing clash when session extends past next session start", () => {
+      const clashes = detectTimingClashes(sampleSessions);
+      expect(clashes).toHaveLength(1);
+      expect(clashes[0].currentId).toBe("sess-1");
+      expect(clashes[0].nextId).toBe("sess-2");
+      expect(clashes[0].overlapMinutes).toBe(30);
+      expect(clashes[0].currentEndTime).toBe("12:05");
+      expect(clashes[0].nextStartTime).toBe("11:35");
+    });
+
+    it("resolves timing clashes by cascading start times forward", () => {
+      const resolved = resolveTimingClashes(sampleSessions);
+      expect(resolved).toHaveLength(3);
+      expect(resolved[0].startTime).toBe("11:10"); // stays 11:10
+      expect(resolved[1].startTime).toBe("12:05"); // shifted to 12:05
+      // sess-2 ends at 12:05 + 55 = 13:00, so sess-3 (was 12:35) shifts to 13:00
+      expect(resolved[2].startTime).toBe("13:00");
+
+      // Verify no clashes remain
+      const remainingClashes = detectTimingClashes(resolved);
+      expect(remainingClashes).toHaveLength(0);
     });
   });
 });

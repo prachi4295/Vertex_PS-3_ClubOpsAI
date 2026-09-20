@@ -18,21 +18,35 @@ import Button from "./ui/Button";
 import { useSessions } from "../hooks/useSessions";
 import { useNotifications } from "../hooks/useNotifications";
 import { generatePhoneticGuide } from "../services/gemini";
+import { INITIAL_EVENTS } from "../data/multiEvents";
+import { getStoredEvents } from "../lib/storage";
 
 /**
  * Edit Stage Modal.
  * Allows adding, editing, deleting, and reordering sessions.
+ * Supports selecting target event taskboard (Item 14).
  * Guarantees plannedStart = startTime when creating a session.
  */
-export default function EditStageModal({ open, onClose }) {
+export default function EditStageModal({ open, onClose, eventId }) {
   const { addNotification } = useNotifications();
+
+  // Load available events
+  const [events] = useState(() => {
+    const list = getStoredEvents();
+    return list.length > 0 ? list : INITIAL_EVENTS;
+  });
+
+  const [targetEventId, setTargetEventId] = useState(
+    eventId || events[0]?.id || "chronops-summit-2026"
+  );
+
   const {
     sessions,
     addSession,
     updateSession,
     deleteSession,
     reorderSessions,
-  } = useSessions();
+  } = useSessions(targetEventId);
 
   const [editingId, setEditingId] = useState(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -214,6 +228,24 @@ export default function EditStageModal({ open, onClose }) {
       className="max-w-2xl w-full"
     >
       <div className="space-y-4">
+        {/* Target Event Taskboard Selector (Item 14) */}
+        <div className="flex items-center justify-between gap-2 p-2.5 bg-neo-white border-3 border-neo-ink shadow-[2px_2px_0_#000]">
+          <span className="text-xs font-black uppercase text-neo-ink">
+            Target Event Taskboard:
+          </span>
+          <select
+            value={targetEventId}
+            onChange={(e) => setTargetEventId(e.target.value)}
+            className="px-2 py-1 border-2 border-neo-ink bg-neo-bg font-black text-xs uppercase cursor-pointer outline-none"
+          >
+            {events.map((ev) => (
+              <option key={ev.id} value={ev.id}>
+                {ev.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Top bar: session count + Add button */}
         <div className="flex items-center justify-between border-b-2 border-neo-ink pb-3">
           <div>

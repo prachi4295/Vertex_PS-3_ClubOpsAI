@@ -113,20 +113,20 @@ describe("New Features: AI Session Config, Document Parsing, Board Editing & Mis
     });
 
     it("detects unassigned tasks and missing timings", () => {
-      const transcript = "HackGenesis 2026: Order 15 heavy duty power strips urgently.";
+      const transcript = "ChronOps Tech Summit 2026: Order 15 heavy duty power strips urgently.";
       const tasks = [
         { title: "Order 15 heavy duty power strips", assignee: "", dueDate: null, priority: "high" },
       ];
 
       const analysis = detectMissingTranscriptDetails(transcript, tasks, INITIAL_EVENTS);
-      expect(analysis.missingEvent).toBe(false); // HackGenesis 2026 is mentioned
+      expect(analysis.missingEvent).toBe(false); // ChronOps Tech Summit 2026 is mentioned
       expect(analysis.unassignedTasks).toHaveLength(1);
       expect(analysis.missingTimingTasks).toHaveLength(1);
       expect(analysis.hasMissing).toBe(true);
     });
 
     it("returns hasMissing: false when transcript contains all specific details", () => {
-      const transcript = "HackGenesis 2026: Arjun, finalize the judging rubric by 2026-09-21.";
+      const transcript = "ChronOps Tech Summit 2026: Arjun, finalize the judging rubric by 2026-09-21 at 09:00 in the Main Auditorium.";
       const tasks = [
         { title: "Finalize judging rubric", assignee: "Arjun", dueDate: "2026-09-21", priority: "high" },
       ];

@@ -17,7 +17,7 @@ import { setSessionsBatchForEvent } from "../hooks/useSessions";
 import { useNotifications } from "../hooks/useNotifications";
 import { INITIAL_EVENTS } from "../data/multiEvents";
 
-const LOCAL_EVENTS_STORAGE_KEY = "clubops_all_events_list";
+import { getStoredEvents } from "../lib/storage";
 
 const PRESET_PROMPTS = [
   {
@@ -37,20 +37,15 @@ const PRESET_PROMPTS = [
 export default function ConfigureSessionsModal({
   open,
   onClose,
-  initialEventId = "hackgenesis-2026",
+  initialEventId = "chronops-summit-2026",
   onSessionsSaved,
 }) {
   const { addNotification } = useNotifications();
 
   // Load available events
   const [events, setEvents] = useState(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn("Failed to load events in ConfigureSessionsModal:", e);
-    }
-    return INITIAL_EVENTS;
+    const list = getStoredEvents();
+    return list.length > 0 ? list : INITIAL_EVENTS;
   });
 
   const [selectedEventId, setSelectedEventId] = useState(initialEventId);
@@ -66,12 +61,9 @@ export default function ConfigureSessionsModal({
     if (initialEventId) {
       setSelectedEventId(initialEventId);
     }
-    // Refresh events from storage when opening
-    try {
-      const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
-      if (saved) setEvents(JSON.parse(saved));
-    } catch (e) {
-      // ignore
+    const list = getStoredEvents();
+    if (list.length > 0) {
+      setEvents(list);
     }
   }, [initialEventId, open]);
 

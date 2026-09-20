@@ -8,10 +8,10 @@ import {
   resetDemoData,
 } from "./seed";
 
-describe("HackGenesis 2026 Seed Data", () => {
+describe("ChronOps Tech Summit 2026 Seed Data", () => {
   it("defines the correct event ID and basic event metadata", () => {
-    expect(DEMO_EVENT_ID).toBe("hackgenesis-2026");
-    expect(SEED_EVENT.name).toBe("HackGenesis 2026");
+    expect(DEMO_EVENT_ID).toBe("chronops-summit-2026");
+    expect(SEED_EVENT.name).toBe("ChronOps Tech Summit 2026");
     expect(SEED_EVENT.status).toBe("active");
   });
 
@@ -72,12 +72,12 @@ describe("HackGenesis 2026 Seed Data", () => {
 
   it("seeds and cleanly resets data", async () => {
     const seeded = await seedDemoData("test-owner-uid");
-    expect(seeded.event.id).toBe("hackgenesis-2026");
+    expect(seeded.event.id).toBe("chronops-summit-2026");
     expect(seeded.tasks.length).toBe(12);
     expect(seeded.sessions.length).toBe(10);
 
     const reset = await resetDemoData("test-owner-uid");
-    expect(reset.event.id).toBe("hackgenesis-2026");
+    expect(reset.event.id).toBe("chronops-summit-2026");
     expect(reset.tasks.length).toBe(12);
     expect(reset.sessions.length).toBe(10);
   });

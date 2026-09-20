@@ -35,6 +35,9 @@ if (isFirebaseConfigured) {
     db = getFirestore(app);
     auth = getAuth(app);
     googleProvider = new GoogleAuthProvider();
+    googleProvider.setCustomParameters({
+      prompt: "select_account",
+    });
   } catch (error) {
     console.warn("Failed to initialize Firebase with provided config:", error);
   }

@@ -17,6 +17,11 @@ import {
   ArrowRight,
   HelpCircle,
   Plus,
+  UploadCloud,
+  FolderPlus,
+  MapPin,
+  Clock,
+  X,
 } from "lucide-react";
 import { Card, Badge, Textarea, Toast, Modal } from "./ui";
 import Button from "./ui/Button";
@@ -30,103 +35,36 @@ import {
   extractTasksFromNotes,
   formatGeminiError,
   detectMissingTranscriptDetails,
+  reframeTranscriptWithAI,
 } from "../services/gemini";
+import { setSessionsBatchForEvent } from "../hooks/useSessions";
 import { INITIAL_EVENTS } from "../data/multiEvents";
+import {
+  getStoredEvents,
+  saveStoredEvents,
+  saveActiveEventId,
+  getActiveUserEmail,
+} from "../lib/storage";
 
-const LOCAL_EVENTS_STORAGE_KEY = "clubops_all_events_list";
+const DEMO_EVENT_IDS = ["chronops-summit-2026", "ai-summit-2026", "club-orientation-2026"];
 
-const SAMPLE_TRANSCRIPT = `HackGenesis 2026 Core Team Standup:
-1. Arjun, finalize the technical track judging rubric with lead mentors by September 21st. High priority.
-2. Priya, coordinate with the auditorium AV team for live multi-camera streaming before September 22nd.
-3. We need 15 heavy-duty extension power strips for the hacking arena. Someone needs to purchase these urgently.
-4. Meera, send the confirmation emails and dietary requirement forms to all keynote speakers by September 20th.
-5. Setup the Discord bot verification channel for hackathon participants.`;
-
-// Demo fallback tasks for testing when Gemini API key is not configured
-const DEMO_EXTRACTED_TASKS = [
-  {
-    title: "Finalize technical track judging rubric with lead mentors",
-    assignee: "Arjun",
-    dueDate: "2026-09-21",
-    priority: "high",
-  },
-  {
-    title: "Coordinate with auditorium AV team for live multi-camera streaming",
-    assignee: "Priya",
-    dueDate: "2026-09-22",
-    priority: "high",
-  },
-  {
-    title: "Purchase 15 heavy-duty extension power strips for hacking arena",
-    assignee: "",
-    dueDate: "2026-09-20",
-    priority: "high",
-  },
-  {
-    title: "Send confirmation emails and dietary forms to keynote speakers",
-    assignee: "Meera",
-    dueDate: "2026-09-20",
-    priority: "medium",
-  },
-  {
-    title: "Setup Discord bot verification channel for hackathon participants",
-    assignee: "",
-    dueDate: null,
-    priority: "medium",
-  },
-];
-
-/**
- * Intelligent detector to match an event name from transcript text.
- * Returns the matching event object, or null if ambiguous / unknown.
- */
-function detectEventFromTranscript(text, eventList) {
-  if (!text) return null;
-  const lower = text.toLowerCase();
-
-  for (const ev of eventList) {
-    const evName = ev.name.toLowerCase();
-    // Direct name match
-    if (lower.includes(evName)) return ev;
-
-    // Direct ID match
-    if (lower.includes(ev.id.toLowerCase())) return ev;
-
-    // Distinctive keywords per event
-    if (ev.id === "hackgenesis-2026" && (lower.includes("hackgenesis") || lower.includes("genesis"))) {
-      return ev;
-    }
-    if (ev.id === "ai-summit-2026" && (lower.includes("ai summit") || lower.includes("web3 summit") || lower.includes("web3"))) {
-      return ev;
-    }
-    if (ev.id === "club-orientation-2026" && (lower.includes("orientation") || lower.includes("recruitment") || lower.includes("showcase"))) {
-      return ev;
-    }
-  }
-
-  return null;
-}
+const SAMPLE_TRANSCRIPT = `Operations Standup:
+1. Dr. Ananya Mukherjee will deliver the Keynote on Next-Gen Autonomous AI Agents at 09:30 in the Main Auditorium.
+2. Arjun, finalize the technical track judging rubric with lead mentors by September 21st at 09:00. High priority.
+3. Priya, coordinate with the auditorium AV team for live multi-camera streaming before 10:00.
+4. We need 15 heavy-duty extension power strips for the hacking arena in Hall B. Someone needs to purchase these urgently.
+5. Meera, send confirmation emails and dietary requirement forms to all keynote speakers by September 20th.
+6. Setup the Discord bot verification channel for summit participants.`;
 
 export default function IntelligenceCard() {
   const { addNotification } = useNotifications();
 
   // Load available events list with auto-sync
-  const [events, setEvents] = useState(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn("Failed to load events for IntelligenceCard:", e);
-    }
-    return INITIAL_EVENTS;
-  });
+  const [events, setEvents] = useState(() => getStoredEvents());
 
   useEffect(() => {
     const handleEventsUpdate = () => {
-      try {
-        const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
-        if (saved) setEvents(JSON.parse(saved));
-      } catch (e) {}
+      setEvents(getStoredEvents());
     };
     window.addEventListener("clubops-data-updated", handleEventsUpdate);
     return () =>
@@ -134,19 +72,28 @@ export default function IntelligenceCard() {
   }, []);
 
   const [notes, setNotes] = useState("");
-  const [targetPreference, setTargetPreference] = useState("auto"); // "auto" or specific eventId
+  const [uploadedFileInfo, setUploadedFileInfo] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [showDemoOption, setShowDemoOption] = useState(false);
-
-  // Missing details state & prompt modal
-  const [missingDetailsModalOpen, setMissingDetailsModalOpen] = useState(false);
-  const [missingDetailsAnalysis, setMissingDetailsAnalysis] = useState(null);
-  const [editableTasks, setEditableTasks] = useState([]);
-  const [modalSelectedEventId, setModalSelectedEventId] = useState(
-    events[0]?.id || "hackgenesis-2026"
-  );
   const [isCommitting, setIsCommitting] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // AI Reframing & Event Creation Prompt Modal State
+  const [reframedData, setReframedData] = useState(null);
+  const [reframeModalOpen, setReframeModalOpen] = useState(false);
+  const [confirmChoice, setConfirmChoice] = useState("create_new"); // "create_new" | "add_to_existing"
+  const [selectedExistingEventId, setSelectedExistingEventId] = useState(
+    events[0]?.id || "chronops-summit-2026"
+  );
+  const [reframeForm, setReframeForm] = useState({
+    name: "",
+    category: "Flagship Hackathon",
+    tagline: "",
+    date: "",
+    location: "",
+  });
 
   // Web Speech API state
   const [isRecording, setIsRecording] = useState(false);
@@ -253,112 +200,72 @@ export default function IntelligenceCard() {
     }
   }, [isRecording, isSpeechSupported, speechLang]);
 
-  // Actually commit extracted tasks to a specific target event board
-  const commitTasksToEventBoard = async (targetEventId, tasksToCreate) => {
-    setIsCommitting(true);
-    try {
-      const targetEvent =
-        events.find((e) => e.id === targetEventId) || {
-          name: "Event",
-          id: targetEventId,
-        };
+  // Robust File Processor for text, markdown, json, csv transcripts
+  const processSelectedFile = (file) => {
+    if (!file) return;
 
-      const created = await addTasksBatchToEvent(targetEventId, tasksToCreate);
-      const createdIds = created.map((t) => t.id);
+    // Check size limit (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMsg(`File is too large (${Math.round(file.size / 1024 / 1024)}MB). Please choose a file smaller than 10MB.`);
+      return;
+    }
 
-      // Add entry to notifications
-      addNotification({
-        type: "ai",
-        message: `AI extracted ${created.length} tasks into "${targetEvent.name}" Backlog`,
-      });
+    const reader = new FileReader();
 
-      // Clear textarea and state on success
-      setNotes("");
-      setErrorMsg("");
-      setShowDemoOption(false);
-      setPendingExtractedTasks([]);
-      setChooseBoardModalOpen(false);
+    reader.onload = (event) => {
+      try {
+        let text = event.target?.result;
+        if (typeof text !== "string") {
+          text = text ? new TextDecoder("utf-8").decode(text) : "";
+        }
+        // Strip BOM if present
+        if (text && text.charCodeAt(0) === 0xfeff) {
+          text = text.slice(1);
+        }
 
-      // Show Toast with Undo action
-      setToastData({
-        message: `AI added ${created.length} task(s) to "${targetEvent.name}"`,
-        type: "success",
-        action: {
-          label: "Undo",
-          onClick: async () => {
-            await deleteTasksBatchFromEvent(targetEventId, createdIds);
-            addNotification({
-              type: "ai",
-              message: `Undid AI task extraction for ${targetEvent.name} (deleted ${createdIds.length} tasks)`,
-            });
-            setToastData({
-              message: `Undone: Removed ${createdIds.length} task(s) from "${targetEvent.name}"`,
-              type: "info",
-            });
-          },
-        },
-      });
-    } catch (err) {
-      console.error("Failed to commit tasks to event board:", err);
-      setErrorMsg(`Could not create tasks: ${err.message}`);
-    } finally {
-      setIsCommitting(false);
-      setProcessing(false);
-      setChooseBoardModalOpen(false);
+        const cleanText = (text || "").trim();
+        if (!cleanText) {
+          setErrorMsg(`The file "${file.name}" contains no readable text or is empty.`);
+          return;
+        }
+
+        setNotes(cleanText);
+        setUploadedFileInfo({
+          name: file.name,
+          chars: cleanText.length,
+          sizeKb: Math.max(1, Math.round(file.size / 1024)),
+        });
+        setErrorMsg("");
+        addNotification({
+          message: `Loaded "${file.name}" (${cleanText.length} characters). Click 'Process with AI' to analyze!`,
+          type: "action",
+        });
+      } catch (err) {
+        console.error("Error decoding file contents:", err);
+        setErrorMsg(`Failed to parse "${file.name}": ${err.message}`);
+      }
+    };
+
+    reader.onerror = (err) => {
+      console.error("FileReader error:", err);
+      setErrorMsg(`Could not read "${file.name}". Please ensure it is a valid text file.`);
+    };
+
+    reader.readAsText(file, "UTF-8");
+  };
+
+  // Handle Transcript File Upload via input
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processSelectedFile(file);
     }
   };
 
-  // Process with live Gemini AI (or intelligent fallback)
-  // Process tasks with missing details check
-  const processExtractedTasksWithDetailsCheck = async (extracted) => {
-    // 1. Check if user explicitly set a target board
-    const explicitTarget = targetPreference !== "auto" ? targetPreference : null;
-    const detectedEvent = detectEventFromTranscript(notes, events);
-    const resolvedEvent = explicitTarget
-      ? events.find((e) => e.id === explicitTarget)
-      : detectedEvent;
-
-    // 2. Run missing details analysis
-    const analysis = detectMissingTranscriptDetails(notes, extracted, events);
-
-    // If event is already resolved, don't flag event as missing
-    if (resolvedEvent) {
-      analysis.missingEvent = false;
-      analysis.missingDetailsList = analysis.missingDetailsList.filter(
-        (item) => item.type !== "event"
-      );
-      analysis.hasMissing = analysis.missingDetailsList.length > 0;
-    }
-
-    // Prompt user if ANY specific operational detail is missing
-    if (analysis.hasMissing || !resolvedEvent) {
-      setMissingDetailsAnalysis(analysis);
-      setEditableTasks(
-        extracted.map((t, idx) => ({
-          id: `task-preview-${idx}`,
-          title: t.title || "Untitled Task",
-          assignee: t.assignee || "",
-          dueDate: t.dueDate || "",
-          priority: t.priority || "medium",
-          wasAssigneeMissing: !t.assignee || t.assignee.trim() === "",
-          wasDueDateMissing: !t.dueDate,
-        }))
-      );
-      setModalSelectedEventId(
-        resolvedEvent ? resolvedEvent.id : (events[0]?.id || "hackgenesis-2026")
-      );
-      setMissingDetailsModalOpen(true);
-      setProcessing(false);
-    } else {
-      // Transcript is comprehensive and specifies all details! Commit directly.
-      await commitTasksToEventBoard(resolvedEvent.id, extracted);
-    }
-  };
-
-  // Process with live Gemini AI
+  // Main AI Processing Function: Actually calls AI, then opens confirmation prompt modal
   const handleProcessAI = async () => {
     if (!notes.trim()) {
-      setErrorMsg("Please paste or record meeting notes first.");
+      setErrorMsg("Please enter, upload, or record a transcript or meeting notes first.");
       return;
     }
 
@@ -367,10 +274,25 @@ export default function IntelligenceCard() {
     setShowDemoOption(false);
 
     try {
-      const extracted = await extractTasksFromNotes(notes);
-      await processExtractedTasksWithDetailsCheck(extracted);
+      // 1. AI actually processes the transcript into structured event, sessions, tasks
+      const result = await reframeTranscriptWithAI(notes);
+      setReframedData(result);
+
+      // 2. Prepopulate confirmation prompt form with AI extracted details
+      setReframeForm({
+        name: result.suggestedName || "ChronOps Innovation Summit 2026",
+        category: result.category || "Flagship Hackathon",
+        tagline: result.tagline || "",
+        date: result.date || new Date().toISOString().split("T")[0],
+        location: result.location || "Main Auditorium",
+      });
+
+      // 3. Set default choice and open explicit confirmation prompt modal
+      setConfirmChoice("create_new");
+      setSelectedExistingEventId(events[0]?.id || "chronops-summit-2026");
+      setReframeModalOpen(true);
     } catch (err) {
-      console.error("AI extraction error:", err);
+      console.error("AI transcript processing error:", err);
       const friendly = formatGeminiError(err);
       setErrorMsg(friendly.message);
       if (
@@ -384,30 +306,130 @@ export default function IntelligenceCard() {
     }
   };
 
-  // Demo fallback action for testing when key is missing
-  const handleProcessDemoMock = async () => {
-    setProcessing(true);
-    setErrorMsg("");
-    setShowDemoOption(false);
+  // Explicit action 1: User confirms creating a new event board from the prompt modal
+  const handleConfirmCreateNewEvent = async () => {
+    if (!reframedData) return;
+    setIsCommitting(true);
+
     try {
-      await processExtractedTasksWithDetailsCheck(DEMO_EXTRACTED_TASKS);
+      const newEventId =
+        reframeForm.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "") + `-${Date.now().toString(36).slice(-4)}`;
+
+      const newEvent = {
+        id: newEventId,
+        ownerEmail: getActiveUserEmail(),
+        name: reframeForm.name.trim(),
+        category: reframeForm.category,
+        tagline: reframeForm.tagline.trim(),
+        date: reframeForm.date,
+        location: reframeForm.location.trim(),
+        status: "active",
+        color: "accent",
+      };
+
+      // 1. Save new event to user-scoped storage
+      const existingEvents = getStoredEvents();
+      const updatedEvents = [newEvent, ...existingEvents];
+      saveStoredEvents(updatedEvents);
+
+      // Make this the active event in LiveFlowView
+      saveActiveEventId(newEventId);
+
+      // 2. Add extracted tasks to this board
+      const tasksCount = reframedData.tasks?.length || 0;
+      if (tasksCount > 0) {
+        await addTasksBatchToEvent(newEventId, reframedData.tasks);
+      }
+
+      // 3. Add extracted sessions to this board
+      const sessionsCount = reframedData.sessions?.length || 0;
+      if (sessionsCount > 0) {
+        await setSessionsBatchForEvent(newEventId, reframedData.sessions);
+      }
+
+      // 4. Notify & trigger live re-renders across the app
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      addNotification({
+        message: `Event "${newEvent.name}" created with ${sessionsCount} sessions and ${tasksCount} tasks!`,
+        type: "ai",
+      });
+
+      setToastData({
+        message: `🎉 Event "${newEvent.name}" successfully created with ${sessionsCount} sessions and ${tasksCount} tasks!`,
+        type: "success",
+      });
+
+      // Clean up modal & input
+      setReframeModalOpen(false);
+      setNotes("");
+      setUploadedFileInfo(null);
     } catch (err) {
-      setErrorMsg(err.message);
+      console.error("Failed to create board from transcript:", err);
+      setErrorMsg(`Failed to create event: ${err.message}`);
     } finally {
-      setProcessing(false);
+      setIsCommitting(false);
     }
   };
 
-  // Commit from the Missing Details Prompt Modal
-  const handleConfirmFromModal = async () => {
-    const tasksToCommit = editableTasks.map((t) => ({
-      title: t.title,
-      assignee: t.assignee.trim(),
-      dueDate: t.dueDate || null,
-      priority: t.priority,
-    }));
-    await commitTasksToEventBoard(modalSelectedEventId, tasksToCommit);
-    setMissingDetailsModalOpen(false);
+  // Explicit action 2: User confirms adding extracted tasks to an existing board
+  const handleConfirmAddToExistingEvent = async () => {
+    if (!reframedData) return;
+    setIsCommitting(true);
+
+    try {
+      const targetEvent =
+        events.find((e) => e.id === selectedExistingEventId) || {
+          name: "Selected Event",
+          id: selectedExistingEventId,
+        };
+
+      const tasksToCreate = reframedData.tasks || [];
+      const created = await addTasksBatchToEvent(
+        selectedExistingEventId,
+        tasksToCreate
+      );
+
+      // Make this target event active
+      saveActiveEventId(selectedExistingEventId);
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+
+      addNotification({
+        message: `Added ${created.length} AI-extracted tasks into "${targetEvent.name}" Backlog`,
+        type: "ai",
+      });
+
+      setToastData({
+        message: `✅ Successfully added ${created.length} task(s) to "${targetEvent.name}"`,
+        type: "success",
+      });
+
+      setReframeModalOpen(false);
+      setNotes("");
+      setUploadedFileInfo(null);
+    } catch (err) {
+      console.error("Failed to add tasks to existing board:", err);
+      setErrorMsg(`Failed to add tasks: ${err.message}`);
+    } finally {
+      setIsCommitting(false);
+    }
+  };
+
+  // Explicit action 3: User explicitly cancels in the prompt modal
+  const handleCancelPrompt = () => {
+    setReframeModalOpen(false);
+    setToastData({
+      message: "Event creation was cancelled. No event or tasks were created.",
+      type: "info",
+    });
   };
 
   return (
@@ -427,129 +449,176 @@ export default function IntelligenceCard() {
         headerColor="bg-neo-muted"
       >
         <div className="space-y-3">
-          {/* Controls Bar: Sample button + Language toggle */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setNotes(SAMPLE_TRANSCRIPT);
-                setErrorMsg("");
-              }}
-              className="text-[11px] font-black uppercase text-neo-ink bg-neo-secondary border-2 border-neo-ink px-2.5 py-1 shadow-[2px_2px_0_#000] hover:shadow-neo-sm transition-all duration-100 ease-linear active:translate-x-[1px] active:translate-y-[1px] active:shadow-none cursor-pointer flex items-center gap-1"
-            >
-              <FileText size={12} strokeWidth={3} />
-              Try sample transcript
-            </button>
+          {/* Clean Top Action Bar: Sample • Upload • Language */}
+          <div className="flex items-center justify-between text-xs font-semibold text-neo-ink/70">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setNotes(SAMPLE_TRANSCRIPT);
+                  setUploadedFileInfo(null);
+                  setErrorMsg("");
+                }}
+                className="text-[11px] font-bold text-neo-ink hover:text-neo-accent hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <FileText size={12} strokeWidth={2.5} />
+                Try sample
+              </button>
 
-            {/* Language toggle for Speech */}
+              <span className="text-neo-ink/30">•</span>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".txt,.md,.json,.csv,.text,text/plain,text/markdown,text/csv,application/json"
+                className="hidden"
+                onClick={(e) => {
+                  e.target.value = "";
+                }}
+                onChange={handleFileUpload}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-[11px] font-bold text-neo-ink hover:text-neo-accent hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <UploadCloud size={12} strokeWidth={2.5} />
+                Upload file
+              </button>
+            </div>
+
             {isSpeechSupported && (
               <button
                 type="button"
                 onClick={() =>
                   setSpeechLang((prev) => (prev === "en-IN" ? "hi-IN" : "en-IN"))
                 }
-                title="Switch voice input language (English / Hindi)"
-                className="text-[10px] font-black uppercase tracking-wider bg-neo-white border-2 border-neo-ink px-2 py-1 shadow-[1px_1px_0_#000] hover:bg-neo-bg cursor-pointer flex items-center gap-1"
+                title="Switch voice language"
+                className="text-[11px] font-bold text-neo-ink/70 hover:text-neo-ink flex items-center gap-1 cursor-pointer"
               >
-                <Globe size={11} strokeWidth={3} />
-                {speechLang === "en-IN" ? "EN-IN (Indian)" : "HI-IN (Hindi)"}
+                <Globe size={11} strokeWidth={2.5} />
+                {speechLang === "en-IN" ? "EN" : "HI"}
               </button>
             )}
           </div>
 
-          {/* Destination Board Selector */}
-          <div className="flex items-center justify-between gap-2 bg-neo-white border-2 border-neo-ink p-1.5 shadow-[2px_2px_0_#000]">
-            <span className="flex items-center gap-1.5 text-[10px] font-black uppercase text-neo-ink">
-              <Layers size={13} strokeWidth={3} className="text-neo-ink" />
-              <span>Target:</span>
-            </span>
-            <select
-              value={targetPreference}
-              onChange={(e) => setTargetPreference(e.target.value)}
-              className="h-6 px-1.5 border border-neo-ink bg-neo-bg font-black text-[10px] uppercase tracking-wide focus:outline-none cursor-pointer"
-            >
-              <option value="auto">Auto-Detect / Ask Me</option>
-              {events.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Uploaded File Pill (if active) */}
+          {uploadedFileInfo && (
+            <div className="flex items-center justify-between px-3 py-2 bg-neo-secondary/30 border-2 border-neo-ink text-xs font-bold text-neo-ink shadow-[2px_2px_0_#000]">
+              <span className="flex items-center gap-2 truncate">
+                <FileText size={15} strokeWidth={2.5} className="text-neo-accent shrink-0" />
+                <span className="truncate">
+                  File: <strong className="underline">{uploadedFileInfo.name}</strong> ({uploadedFileInfo.chars} chars • {uploadedFileInfo.sizeKb} KB)
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setUploadedFileInfo(null);
+                  setNotes("");
+                }}
+                className="text-[10px] font-black uppercase bg-neo-white text-neo-accent px-2 py-0.5 border border-neo-ink hover:bg-neo-accent hover:text-neo-white transition-all shrink-0 ml-2 cursor-pointer shadow-[1px_1px_0_#000]"
+                title="Clear uploaded file"
+              >
+                Clear
+              </button>
+            </div>
+          )}
 
-          {/* Textarea for transcript or notes */}
-          <div className="relative">
+          {/* Transcript Textarea with Drag and Drop Support */}
+          <div
+            className={`relative transition-all ${
+              isDragging ? "ring-4 ring-neo-accent" : ""
+            }`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(true);
+            }}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragging(false);
+              const droppedFile = e.dataTransfer.files?.[0];
+              if (droppedFile) {
+                processSelectedFile(droppedFile);
+              }
+            }}
+          >
+            {isDragging && (
+              <div className="absolute inset-0 bg-neo-secondary/95 border-4 border-dashed border-neo-ink z-20 flex flex-col items-center justify-center p-4 pointer-events-none">
+                <UploadCloud size={36} strokeWidth={3} className="text-neo-ink animate-bounce" />
+                <span className="font-black text-sm uppercase text-neo-ink mt-2">
+                  Drop text file to load transcript
+                </span>
+              </div>
+            )}
+
             <Textarea
-              rows={4}
+              rows={5}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Paste meeting standup notes or record voice transcript to automatically parse into Kanban tasks..."
+              placeholder="Paste standup notes or transcript. AI will extract event details, sessions, and tasks, then prompt to create the event..."
               className="!text-xs leading-relaxed"
             />
 
-            {/* Interim voice recognition overlay */}
-            {interimText && (
-              <div className="mt-1 px-2 py-1 bg-neo-secondary/30 border-2 border-neo-ink text-[10px] font-bold text-neo-ink animate-pulse flex items-center gap-1">
-                <span className="w-2 h-2 bg-neo-accent rounded-full animate-ping" />
-                <span className="truncate">Hearing: "{interimText}"</span>
-              </div>
-            )}
-          </div>
-
-          {/* Voice Input Button & Fallback Notice */}
-          <div className="flex items-center gap-2">
-            {isSpeechSupported ? (
+            {/* Voice Input Trigger Icon inside textarea bottom-right */}
+            {isSpeechSupported && (
               <button
                 type="button"
                 onClick={toggleRecording}
                 className={[
-                  "flex-1 h-10 border-3 border-neo-ink font-black text-xs uppercase tracking-wider",
-                  "flex items-center justify-center gap-2 cursor-pointer shadow-neo-sm hover:shadow-neo",
-                  "transition-all duration-100 ease-linear active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
+                  "absolute right-2 bottom-2 p-1.5 border border-neo-ink rounded-none cursor-pointer transition-all",
                   isRecording
                     ? "bg-neo-accent text-neo-white animate-pulse"
-                    : "bg-neo-white text-neo-ink hover:bg-neo-bg",
+                    : "bg-neo-white text-neo-ink hover:bg-neo-bg shadow-[1px_1px_0_#000]",
                 ].join(" ")}
+                title={isRecording ? "Stop recording" : `Voice input (${speechLang})`}
               >
-                {isRecording ? (
-                  <>
-                    <MicOff size={16} strokeWidth={3} />
-                    <span>Stop Recording</span>
-                  </>
-                ) : (
-                  <>
-                    <Mic size={16} strokeWidth={3} />
-                    <span>Voice Input ({speechLang})</span>
-                  </>
-                )}
+                {isRecording ? <MicOff size={14} strokeWidth={2.5} /> : <Mic size={14} strokeWidth={2.5} />}
               </button>
-            ) : (
-              <div className="flex-1 p-2 bg-neo-bg border-2 border-neo-ink text-[10px] font-bold text-neo-ink/60 text-center uppercase">
-                Voice input supported in Google Chrome
+            )}
+
+            {interimText && (
+              <div className="mt-1 px-2 py-1 bg-neo-secondary/30 text-[10px] font-semibold text-neo-ink animate-pulse flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-neo-accent rounded-full animate-ping" />
+                <span className="truncate">"{interimText}"</span>
               </div>
             )}
           </div>
 
-          {/* Primary Action Button: PROCESS WITH AI */}
-          <Button
-            variant="primary"
-            size="md"
-            onClick={handleProcessAI}
-            disabled={processing || !notes.trim()}
-            className="w-full !h-12 !text-sm tracking-wider"
-          >
-            {processing ? (
-              <>
-                <RefreshCw size={16} strokeWidth={3} className="animate-spin" />
-                <span>EXTRACTING TASKS WITH AI...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles size={16} strokeWidth={3} />
-                <span>PROCESS WITH AI</span>
-              </>
-            )}
-          </Button>
+          {/* Action: Process Transcript with AI */}
+          <div>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={handleProcessAI}
+              disabled={processing || !notes.trim()}
+              className="w-full !h-11 !text-xs font-bold"
+            >
+              {processing ? (
+                <>
+                  <RefreshCw size={14} strokeWidth={2.5} className="animate-spin" />
+                  <span>AI Analyzing Transcript...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} strokeWidth={2.5} />
+                  <span>Process with AI</span>
+                </>
+              )}
+            </Button>
+          </div>
 
           {/* Error Banner with Optional Demo Fallback Button */}
           {errorMsg && (
@@ -568,14 +637,17 @@ export default function IntelligenceCard() {
               {showDemoOption && (
                 <div className="pt-2 border-t border-neo-accent/30 flex items-center justify-between">
                   <span className="text-[10px] font-bold text-neo-ink/70 uppercase">
-                    Testing without Gemini key?
+                    API Unavailable?
                   </span>
                   <button
                     type="button"
-                    onClick={handleProcessDemoMock}
+                    onClick={() => {
+                      setNotes(SAMPLE_TRANSCRIPT);
+                      handleProcessAI();
+                    }}
                     className="text-[10px] font-black uppercase bg-neo-secondary border-2 border-neo-ink px-2 py-0.5 cursor-pointer shadow-[1px_1px_0_#000]"
                   >
-                    Parse as Demo Sample
+                    Retry with Demo Sample
                   </button>
                 </div>
               )}
@@ -584,241 +656,445 @@ export default function IntelligenceCard() {
         </div>
       </Card>
 
-      {/* ─── Modal: Missing Transcript Details Prompt ─── */}
+      {/* ─── Modal: AI Transcript Analysis & Event Creation Prompt ─── */}
       <Modal
-        isOpen={missingDetailsModalOpen}
+        open={reframeModalOpen}
         onClose={() => {
           if (!isCommitting) {
-            setMissingDetailsModalOpen(false);
-            setEditableTasks([]);
-            setProcessing(false);
+            handleCancelPrompt();
           }
         }}
-        title="⚠️ Missing Details in Transcript Detected"
+        title="✨ AI Transcript Analysis: Event Confirmation"
         size="lg"
       >
         <div className="space-y-4">
-          {/* Missing details breakdown banner */}
-          <div className="p-3.5 bg-[#FFF9D2] border-3 border-neo-ink space-y-2">
+          {/* Explicit Confirmation Prompt Banner */}
+          <div className="p-3.5 bg-neo-secondary/40 border-3 border-neo-ink space-y-1 shadow-[2px_2px_0_#000]">
             <div className="flex items-center gap-2">
-              <AlertTriangle size={18} strokeWidth={3} className="text-neo-ink shrink-0" />
-              <span className="font-black text-xs uppercase tracking-wider text-neo-ink">
-                Please provide or confirm the following missing operational details:
+              <Sparkles size={16} strokeWidth={3} className="text-neo-ink" />
+              <span className="font-black text-xs uppercase tracking-wide text-neo-ink">
+                AI Analysis Complete
               </span>
             </div>
-            <ul className="space-y-1 pl-6 list-disc text-xs font-bold text-neo-ink/90">
-              {missingDetailsAnalysis?.missingEvent && (
-                <li>
-                  <span className="text-red-700 font-black">Target Event Board:</span> The transcript did not specify which event these tasks belong to.
-                </li>
-              )}
-              {missingDetailsAnalysis?.unassignedTasks?.length > 0 && (
-                <li>
-                  <span className="text-amber-800 font-black">Unassigned Tasks:</span> {missingDetailsAnalysis.unassignedTasks.length} task(s) do not have an assigned person or volunteer.
-                </li>
-              )}
-              {missingDetailsAnalysis?.missingTimingTasks?.length > 0 && (
-                <li>
-                  <span className="text-amber-800 font-black">Missing Deadlines:</span> {missingDetailsAnalysis.missingTimingTasks.length} task(s) do not have a due date or timing mentioned.
-                </li>
-              )}
-            </ul>
+            <p className="text-xs font-bold text-neo-ink leading-relaxed">
+              AI has analyzed your transcript and extracted the event schedule and tasks below.
+              <strong> Would you like to create a new Event from this transcript, or add tasks to an existing event?</strong>
+            </p>
           </div>
 
-          {/* Selectable Event Taskboards */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-black uppercase tracking-wider text-neo-ink">
-                1. Destination Event Board:
-              </label>
-              {missingDetailsAnalysis?.missingEvent ? (
-                <span className="text-[10px] font-black uppercase text-red-600 bg-neo-white px-1.5 py-0.5 border border-neo-ink">
-                  Required Choice
-                </span>
-              ) : (
-                <span className="text-[10px] font-black uppercase text-emerald-700 bg-neo-white px-1.5 py-0.5 border border-neo-ink">
-                  Detected / Selected
-                </span>
-              )}
-            </div>
+          {/* Choice Selector: Create New Event vs Add to Existing */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmChoice("create_new")}
+              className={`p-2.5 text-center border-3 border-neo-ink text-xs font-black uppercase tracking-wider transition-all cursor-pointer outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 select-none ${
+                confirmChoice === "create_new"
+                  ? "bg-neo-secondary text-neo-ink shadow-[2px_2px_0_#000] translate-x-[1px] translate-y-[1px]"
+                  : "bg-neo-white text-neo-ink hover:bg-neo-bg shadow-[2px_2px_0_#000]"
+              }`}
+            >
+              <div className="flex items-center justify-center gap-1.5">
+                <FolderPlus size={15} strokeWidth={3} />
+                <span>Create New Event Board</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmChoice("add_to_existing")}
+              className={`p-2.5 text-center border-3 border-neo-ink text-xs font-black uppercase tracking-wider transition-all cursor-pointer outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 select-none ${
+                confirmChoice === "add_to_existing"
+                  ? "bg-neo-secondary text-neo-ink shadow-[2px_2px_0_#000] translate-x-[1px] translate-y-[1px]"
+                  : "bg-neo-white text-neo-ink hover:bg-neo-bg shadow-[2px_2px_0_#000]"
+              }`}
+            >
+              <div className="flex items-center justify-center gap-1.5">
+                <Layers size={15} strokeWidth={3} />
+                <span>Add Tasks to Existing Event</span>
+              </div>
+            </button>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {events.map((ev) => {
-                const isSelected = modalSelectedEventId === ev.id;
-                return (
-                  <button
-                    type="button"
-                    key={ev.id}
-                    onClick={() => setModalSelectedEventId(ev.id)}
-                    className={[
-                      "p-2.5 text-left border-3 border-neo-ink transition-all cursor-pointer flex flex-col justify-between",
-                      isSelected
-                        ? "bg-neo-secondary shadow-neo-sm font-black translate-x-[1px] translate-y-[1px]"
-                        : "bg-neo-white hover:bg-neo-bg shadow-[2px_2px_0_#000]",
-                    ].join(" ")}
+          {/* Missing Details Warning Banner (if any) */}
+          {reframedData?.missingDetails && reframedData.missingDetails.length > 0 && (
+            <div className="p-2.5 bg-amber-100 border-3 border-neo-ink space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle size={14} strokeWidth={3} className="text-amber-800 shrink-0" />
+                <span className="font-black text-xs uppercase tracking-wider text-amber-900">
+                  Missing Details:
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                {reframedData.missingDetails.map((item, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 font-black text-[11px] text-amber-950 uppercase"
                   >
-                    <div className="flex items-center justify-between gap-1 w-full mb-1">
-                      <span className="text-xs font-black truncate">{ev.name}</span>
-                      {isSelected && <Check size={14} strokeWidth={3} className="shrink-0" />}
-                    </div>
-                    <span className="text-[10px] font-bold text-neo-ink/70 uppercase truncate">
-                      {ev.tagline || ev.category}
-                    </span>
-                  </button>
-                );
-              })}
+                    <span className="text-amber-800 font-black">•</span>
+                    <span>{item}</span>
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Inline Tasks Editor for Missing Fields */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-black uppercase tracking-wider text-neo-ink">
-                2. Review Tasks & Fill Missing Details ({editableTasks.length}):
-              </label>
-              <span className="text-[10px] font-bold text-neo-ink/70">
-                Highlighted fields were missing from notes
-              </span>
-            </div>
+          {/* CHOICE 1: Create New Event Form & Details */}
+          {confirmChoice === "create_new" ? (
+            <div className="space-y-3 pt-1">
+              <h4 className="font-black text-xs uppercase tracking-wider text-neo-ink flex items-center gap-1.5">
+                <Sparkles size={14} strokeWidth={3} className="text-neo-secondary" />
+                1. AI Suggested Event Details:
+              </h4>
 
-            <div className="border-3 border-neo-ink bg-neo-bg/40 p-2.5 max-h-60 overflow-y-auto space-y-2">
-              {editableTasks.map((task, idx) => (
-                <div
-                  key={task.id}
-                  className="bg-neo-white border-2 border-neo-ink p-2.5 shadow-[2px_2px_0_#000] space-y-2"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <input
-                      type="text"
-                      value={task.title}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditableTasks((prev) =>
-                          prev.map((t, i) => (i === idx ? { ...t, title: val } : t))
-                        );
-                      }}
-                      className="font-black text-xs text-neo-ink bg-transparent border-b-2 border-neo-ink/30 focus:border-neo-ink outline-none flex-1 pb-0.5"
-                    />
-                    <select
-                      value={task.priority}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditableTasks((prev) =>
-                          prev.map((t, i) => (i === idx ? { ...t, priority: val } : t))
-                        );
-                      }}
-                      className="text-[10px] font-black border border-neo-ink bg-neo-bg px-1 py-0.5"
-                    >
-                      <option value="low">LOW</option>
-                      <option value="medium">MEDIUM</option>
-                      <option value="high">HIGH</option>
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    {/* Assignee Input */}
-                    <div>
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-[10px] font-bold uppercase text-neo-ink/70">
-                          Assignee:
-                        </span>
-                        {task.wasAssigneeMissing && !task.assignee && (
-                          <span className="text-[9px] font-black uppercase text-amber-800 bg-amber-100 px-1 border border-amber-400">
-                            Missing in Notes
-                          </span>
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="e.g. Arjun, Priya, Core Team"
-                        value={task.assignee}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditableTasks((prev) =>
-                            prev.map((t, i) => (i === idx ? { ...t, assignee: val } : t))
-                          );
-                        }}
-                        className={[
-                          "w-full px-2 py-1 text-xs font-bold border-2 outline-none",
-                          task.wasAssigneeMissing && !task.assignee
-                            ? "border-amber-500 bg-amber-50/50"
-                            : "border-neo-ink bg-neo-white",
-                        ].join(" ")}
-                      />
-                    </div>
-
-                    {/* Due Date Input */}
-                    <div>
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-[10px] font-bold uppercase text-neo-ink/70">
-                          Due Date:
-                        </span>
-                        {task.wasDueDateMissing && !task.dueDate && (
-                          <span className="text-[9px] font-black uppercase text-amber-800 bg-amber-100 px-1 border border-amber-400">
-                            Missing in Notes
-                          </span>
-                        )}
-                      </div>
-                      <input
-                        type="date"
-                        value={task.dueDate}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditableTasks((prev) =>
-                            prev.map((t, i) => (i === idx ? { ...t, dueDate: val } : t))
-                          );
-                        }}
-                        className={[
-                          "w-full px-2 py-1 text-xs font-bold border-2 outline-none",
-                          task.wasDueDateMissing && !task.dueDate
-                            ? "border-amber-500 bg-amber-50/50"
-                            : "border-neo-ink bg-neo-white",
-                        ].join(" ")}
-                      />
-                    </div>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-black uppercase text-neo-ink/70 mb-0.5">
+                    Event Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={reframeForm.name}
+                    onChange={(e) =>
+                      setReframeForm((prev) => ({ ...prev, name: e.target.value }))
+                    }
+                    className="w-full px-2 py-1.5 text-xs font-black border-2 border-neo-ink bg-neo-white outline-none focus:bg-amber-50"
+                    placeholder="e.g. ChronOps Hackathon 2026"
+                  />
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Modal Action Buttons */}
-          <div className="flex justify-end gap-2 pt-3 border-t-2 border-neo-ink/20">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-neo-ink/70 mb-0.5">
+                    Category
+                  </label>
+                  <select
+                    value={reframeForm.category}
+                    onChange={(e) =>
+                      setReframeForm((prev) => ({ ...prev, category: e.target.value }))
+                    }
+                    className="w-full px-2 py-1.5 text-xs font-bold border-2 border-neo-ink bg-neo-white outline-none"
+                  >
+                    <option value="Flagship Hackathon">Flagship Hackathon</option>
+                    <option value="Technical Workshop">Technical Workshop</option>
+                    <option value="Keynote Conference">Keynote Conference</option>
+                    <option value="Orientation & Recruiting">Orientation & Recruiting</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-neo-ink/70 mb-0.5">
+                    Tagline / Subtitle
+                  </label>
+                  <input
+                    type="text"
+                    value={reframeForm.tagline}
+                    onChange={(e) =>
+                      setReframeForm((prev) => ({ ...prev, tagline: e.target.value }))
+                    }
+                    className="w-full px-2 py-1.5 text-xs font-bold border-2 border-neo-ink bg-neo-white outline-none"
+                    placeholder="e.g. 36 Hours of Autonomous AI Building"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="text-[10px] font-black uppercase text-neo-ink/70">
+                      Event Date *
+                    </label>
+                    {(!reframeForm.date ||
+                      reframedData?.missingDetails?.some((d) =>
+                        d.toLowerCase().includes("date")
+                      )) && (
+                      <span className="text-[9px] font-black text-amber-800 bg-amber-200 px-1 border border-amber-400 uppercase">
+                        Missing from Transcript
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="date"
+                    value={reframeForm.date}
+                    onChange={(e) =>
+                      setReframeForm((prev) => ({ ...prev, date: e.target.value }))
+                    }
+                    className={[
+                      "w-full px-2 py-1.5 text-xs font-bold border-2 outline-none",
+                      !reframeForm.date
+                        ? "border-amber-500 bg-amber-50"
+                        : "border-neo-ink bg-neo-white",
+                    ].join(" ")}
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="text-[10px] font-black uppercase text-neo-ink/70">
+                      Venue / Location *
+                    </label>
+                    {(!reframeForm.location ||
+                      reframedData?.missingDetails?.some(
+                        (d) =>
+                          d.toLowerCase().includes("venue") ||
+                          d.toLowerCase().includes("location")
+                      )) && (
+                      <span className="text-[9px] font-black text-amber-800 bg-amber-200 px-1 border border-amber-400 uppercase">
+                        Missing from Transcript
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={reframeForm.location}
+                    onChange={(e) =>
+                      setReframeForm((prev) => ({ ...prev, location: e.target.value }))
+                    }
+                    placeholder="e.g. Main Campus Auditorium"
+                    className={[
+                      "w-full px-2 py-1.5 text-xs font-bold border-2 outline-none",
+                      !reframeForm.location
+                        ? "border-amber-500 bg-amber-50"
+                        : "border-neo-ink bg-neo-white",
+                    ].join(" ")}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* CHOICE 2: Target Existing Event Board */
+            <div className="space-y-2 pt-1">
+              <label className="block text-xs font-black uppercase tracking-wider text-neo-ink">
+                Select Destination Event Board:
+              </label>
+              <div
+                className={[
+                  "grid gap-2.5",
+                  events.length === 1
+                    ? "grid-cols-1 max-w-md"
+                    : events.length === 2
+                    ? "grid-cols-1 sm:grid-cols-2"
+                    : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3",
+                ].join(" ")}
+              >
+                {events.map((ev) => {
+                  const isSelected = selectedExistingEventId === ev.id;
+                  return (
+                    <button
+                      type="button"
+                      key={ev.id}
+                      onClick={() => setSelectedExistingEventId(ev.id)}
+                      className={[
+                        "p-3 text-left border-3 border-neo-ink transition-all cursor-pointer flex flex-col justify-between min-w-0 w-full overflow-hidden",
+                        isSelected
+                          ? "bg-neo-secondary shadow-neo-sm font-black translate-x-[1px] translate-y-[1px]"
+                          : "bg-neo-white hover:bg-neo-bg shadow-[2px_2px_0_#000]",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-center justify-between gap-2 w-full min-w-0 mb-1.5">
+                        <span
+                          className="text-xs font-black truncate block min-w-0"
+                          title={ev.name}
+                        >
+                          {ev.name}
+                        </span>
+                        {isSelected && (
+                          <Check size={14} strokeWidth={3} className="shrink-0 text-neo-ink" />
+                        )}
+                      </div>
+                      {(ev.tagline || ev.category) && (
+                        <span
+                          className="block w-full min-w-0 text-[10px] font-bold text-neo-ink/70 uppercase truncate"
+                          title={ev.tagline || ev.category}
+                        >
+                          {ev.tagline || ev.category}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* AI Extracted Stage Sessions preview */}
+          {reframedData?.sessions && reframedData.sessions.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-black uppercase tracking-wider text-neo-ink flex items-center justify-between">
+                <span>
+                  {confirmChoice === "create_new" ? "2. " : ""}Extracted Live Stage Schedule ({reframedData.sessions.length}):
+                </span>
+                <span className="text-[10px] text-neo-ink/70 font-bold">
+                  {confirmChoice === "create_new" ? "Will populate Live Flow" : "Stage sessions (preview only)"}
+                </span>
+              </label>
+              <div className="border-2 border-neo-ink bg-neo-white max-h-36 overflow-y-auto divide-y divide-neo-ink/15">
+                {reframedData.sessions.map((s, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between text-xs font-bold px-3 py-2 hover:bg-neo-bg/30 transition-colors"
+                  >
+                    <span className="truncate flex-1 text-neo-ink">
+                      {s.title} {s.speaker ? `— ${s.speaker}` : ""}
+                    </span>
+                    <span className="text-[10px] font-black bg-neo-secondary px-2 py-0.5 border border-neo-ink ml-2 shrink-0">
+                      {s.startTime || "TBD"} ({s.durationMinutes || 30}m)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* AI Extracted Tasks preview */}
+          {reframedData?.tasks && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-black uppercase tracking-wider text-neo-ink flex items-center justify-between">
+                <span>
+                  {confirmChoice === "create_new" ? "3. " : ""}Extracted Tasks ({reframedData.tasks.length}):
+                </span>
+                <span className="text-[10px] text-neo-ink/70 font-bold">
+                  Will add to Kanban Backlog
+                </span>
+              </label>
+              <div className="border-2 border-neo-ink bg-neo-white max-h-40 overflow-y-auto divide-y divide-neo-ink/15">
+                {reframedData.tasks.map((t, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between text-xs font-bold px-3 py-2 hover:bg-neo-bg/30 transition-colors"
+                  >
+                    <span className="truncate flex-1 text-neo-ink">{t.title}</span>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {t.assignee && (
+                        <span className="text-[10px] font-bold bg-neo-bg px-1.5 py-0.5 border border-neo-ink/40">
+                          {t.assignee}
+                        </span>
+                      )}
+                      <span className={[
+                        "text-[9px] font-black uppercase px-1.5 py-0.5 border border-neo-ink/40",
+                        t.priority === "high" ? "bg-neo-accent text-neo-white" : t.priority === "medium" ? "bg-neo-secondary text-neo-ink" : "bg-neo-muted text-neo-ink",
+                      ].join(" ")}>
+                        {t.priority}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReframedData((prev) => ({
+                            ...prev,
+                            tasks: prev.tasks.filter((_, i) => i !== idx),
+                          }));
+                        }}
+                        className="text-neo-accent hover:text-neo-ink cursor-pointer bg-transparent border-0 p-0.5 ml-0.5"
+                        title="Remove task"
+                      >
+                        <X size={13} strokeWidth={3} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add Task Inline Form */}
+              <div className="flex items-end gap-1.5 pt-1">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    placeholder="Add a custom task..."
+                    id="add-task-title-input"
+                    className="w-full px-2 py-1.5 text-xs font-bold border-2 border-neo-ink bg-neo-white outline-none focus:bg-amber-50"
+                  />
+                </div>
+                <div className="w-24">
+                  <select
+                    id="add-task-priority-input"
+                    defaultValue="medium"
+                    className="w-full px-1 py-1.5 text-[10px] font-bold uppercase border-2 border-neo-ink bg-neo-white outline-none"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const titleEl = document.getElementById("add-task-title-input");
+                    const priorityEl = document.getElementById("add-task-priority-input");
+                    const title = titleEl?.value?.trim();
+                    if (!title) return;
+                    setReframedData((prev) => ({
+                      ...prev,
+                      tasks: [
+                        ...(prev.tasks || []),
+                        {
+                          title,
+                          assignee: "",
+                          dueDate: null,
+                          dueTime: null,
+                          priority: priorityEl?.value || "medium",
+                          status: "backlog",
+                        },
+                      ],
+                    }));
+                    if (titleEl) titleEl.value = "";
+                  }}
+                  className="px-2.5 py-1.5 bg-neo-secondary text-neo-ink border-2 border-neo-ink font-black text-[10px] uppercase flex items-center gap-1 cursor-pointer shadow-[1px_1px_0_#000] active:translate-x-[1px] active:translate-y-[1px] hover:bg-neo-accent hover:text-neo-white"
+                >
+                  <Plus size={12} strokeWidth={3} />
+                  Add
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Action Buttons: Explicit Decisions */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t-2 border-neo-ink/20">
             <Button
               type="button"
               variant="outline"
               size="sm"
               disabled={isCommitting}
-              onClick={() => {
-                setMissingDetailsModalOpen(false);
-                setEditableTasks([]);
-                setProcessing(false);
-              }}
+              onClick={handleCancelPrompt}
             >
-              Cancel
+              Cancel / Do Not Create
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={isCommitting}
-              onClick={handleConfirmFromModal}
-              className="!text-xs"
-            >
-              <Plus size={16} strokeWidth={3} />
-              {isCommitting ? "Creating Tasks..." : "Apply Details & Create Tasks"}
-            </Button>
+
+            {confirmChoice === "create_new" ? (
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                disabled={isCommitting || !reframeForm.name.trim()}
+                onClick={handleConfirmCreateNewEvent}
+                className="!text-xs"
+              >
+                <FolderPlus size={16} strokeWidth={3} />
+                {isCommitting
+                  ? "Creating Event..."
+                  : "Confirm & Create New Event Board"}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={isCommitting || !selectedExistingEventId}
+                onClick={handleConfirmAddToExistingEvent}
+                className="!text-xs"
+              >
+                <Plus size={16} strokeWidth={3} />
+                {isCommitting
+                  ? "Adding Tasks..."
+                  : "Confirm & Add Tasks to Selected Board"}
+              </Button>
+            )}
           </div>
         </div>
       </Modal>
 
-      {/* Floating Toast with Undo Action */}
+      {/* Floating Toast with Notifications */}
       {toastData && (
         <Toast
           message={toastData.message}
           type={toastData.type}
           action={toastData.action}
-          duration={8000}
+          duration={7000}
           onClose={() => setToastData(null)}
         />
       )}

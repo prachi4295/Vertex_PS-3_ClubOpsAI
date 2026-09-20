@@ -10,12 +10,13 @@ const CATEGORY_OPTIONS = [
   "Workshop & Bootcamp",
   "Meetup & Demo Day",
   "Competition",
+  "Other",
 ];
 
-const LOCAL_EVENTS_STORAGE_KEY = "clubops_all_events_list";
+import { getStoredEvents, saveStoredEvents } from "../lib/storage";
 
 /**
- * EditEventModal: Allows organizers to change event name, date, location, category, and tagline.
+ * EditEventModal: Allows organizers to change event name, date, location, category (with Other option), and tagline.
  */
 export default function EditEventModal({ open, onClose, event, onEventUpdated }) {
   const [form, setForm] = useState({
@@ -25,30 +26,33 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
     date: "",
     location: "",
   });
+  const [customCategory, setCustomCategory] = useState("");
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (event) {
+      const isStandardCat = CATEGORY_OPTIONS.includes(event.category) && event.category !== "Other";
       setForm({
         name: event.name || "",
-        category: event.category || "Flagship Hackathon",
+        category: isStandardCat ? event.category : "Other",
         tagline: event.tagline || "",
         date: event.date || new Date().toISOString().split("T")[0],
         location: event.location || "",
       });
+      setCustomCategory(!isStandardCat ? event.category || "" : "");
     }
     setErrors({});
   }, [event, open]);
 
-  const validate = () => {
-    const errs = {};
-    if (!form.name.trim()) errs.name = "Event name is required";
-    if (!form.date) errs.date = "Event date is required";
-    if (!form.location.trim()) errs.location = "Venue / Location is required";
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
+  function validate() {
+    const e = {};
+    if (!form.name.trim()) e.name = "Event name is required";
+    if (!form.date) e.date = "Event date is required";
+    if (!form.location.trim()) e.location = "Location/Venue is required";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -56,46 +60,38 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
 
     setSaving(true);
     try {
+      const effectiveCategory = form.category === "Other"
+        ? (customCategory.trim() || "Other")
+        : form.category;
+
       const updatedEvent = {
         ...event,
         name: form.name.trim(),
-        category: form.category,
+        category: effectiveCategory,
         tagline: form.tagline.trim(),
         date: form.date,
         location: form.location.trim(),
       };
 
-      // Update in localStorage
-      try {
-        const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
-        if (saved) {
-          const list = JSON.parse(saved);
-          const updatedList = list.map((ev) =>
-            ev.id === event.id ? updatedEvent : ev
-          );
-          localStorage.setItem(
-            LOCAL_EVENTS_STORAGE_KEY,
-            JSON.stringify(updatedList)
-          );
-        }
-      } catch (err) {
-        console.warn("Failed to persist updated event to localStorage:", err);
+      // Save to user-scoped storage
+      const eventsList = getStoredEvents();
+      const updatedList = eventsList.map((ev) =>
+        ev.id === event.id ? updatedEvent : ev
+      );
+      saveStoredEvents(updatedList);
+
+      if (onEventUpdated) {
+        onEventUpdated(updatedEvent);
       }
 
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
-      }
-
-      onEventUpdated?.(updatedEvent);
       onClose();
     } catch (err) {
-      setErrors({ submit: err.message || "Failed to update event" });
+      console.error("Failed to update event:", err);
+      setErrors({ submit: "Failed to save event details." });
     } finally {
       setSaving(false);
     }
   };
-
-  if (!event) return null;
 
   return (
     <Modal open={open} onClose={onClose} title="Edit Event Board Details">
@@ -110,7 +106,7 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
           </label>
           <Input
             id="edit-event-name"
-            placeholder="e.g. HackGenesis 2026"
+            placeholder="e.g. ChronOps Tech Summit 2026"
             value={form.name}
             onChange={(e) => {
               setForm((prev) => ({ ...prev, name: e.target.value }));
@@ -172,7 +168,7 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
           </div>
         </div>
 
-        {/* Category */}
+        {/* Category with "Other" option (Item 15) */}
         <div>
           <label
             htmlFor="edit-event-category"
@@ -194,6 +190,17 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
               </option>
             ))}
           </select>
+
+          {form.category === "Other" && (
+            <div className="mt-2">
+              <Input
+                placeholder="Enter custom category (e.g. Design Sprint, Esports)"
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                className="!h-10 text-xs font-bold"
+              />
+            </div>
+          )}
         </div>
 
         {/* Tagline */}
@@ -214,26 +221,30 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
           />
         </div>
 
-        {/* Submit Error */}
         {errors.submit && (
-          <div className="bg-neo-accent/10 border-4 border-neo-accent p-3">
-            <p className="font-bold text-xs text-neo-accent">{errors.submit}</p>
-          </div>
+          <p className="font-bold text-xs text-neo-accent">{errors.submit}</p>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex justify-end gap-2 pt-3 border-t-2 border-neo-ink/20">
+        {/* Action buttons */}
+        <div className="flex items-center justify-end gap-2 pt-2 border-t-2 border-neo-ink">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={onClose}
             disabled={saving}
+            className="!text-xs"
           >
             Cancel
           </Button>
-          <Button type="submit" variant="primary" size="sm" disabled={saving}>
-            {saving ? "Saving Changes..." : "Save Changes"}
+          <Button
+            type="submit"
+            variant="secondary"
+            size="sm"
+            disabled={saving}
+            className="!text-xs"
+          >
+            {saving ? "Saving..." : "Save Details"}
           </Button>
         </div>
       </form>

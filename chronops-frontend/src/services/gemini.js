@@ -2,9 +2,21 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const rawModel = import.meta.env.VITE_GEMINI_MODEL || "";
-// Automatically upgrade deprecated gemini-2.0-flash to gemini-2.5-flash
+// Modern 2026 models: gemini-3.5-flash-lite (fast & robust), gemini-3.6-flash, gemini-3.8-flash
 export const MODEL =
-  rawModel && rawModel !== "gemini-2.0-flash" ? rawModel : "gemini-2.5-flash";
+  rawModel &&
+  rawModel !== "gemini-2.0-flash" &&
+  rawModel !== "gemini-2.5-flash" &&
+  rawModel !== "gemini-1.5-flash"
+    ? rawModel
+    : "gemini-3.5-flash-lite";
+
+const FALLBACK_MODELS = [
+  MODEL,
+  "gemini-3.5-flash-lite",
+  "gemini-3.6-flash",
+  "gemini-3.8-flash",
+].filter((v, i, a) => a.indexOf(v) === i);
 
 let aiClient = null;
 
@@ -63,12 +75,10 @@ async function withTimeoutAndRetry(operation, timeoutMs = 8000) {
     } catch (err) {
       lastError = err;
       const msg = err?.message || String(err);
-      // Fail fast without retrying for non-retryable errors
+      // Fail fast without retrying for non-retryable credentials errors
       if (
         !API_KEY ||
         API_KEY.trim() === "" ||
-        msg.includes("404") ||
-        msg.includes("NOT_FOUND") ||
         msg.includes("not valid") ||
         msg.includes("API_KEY_INVALID") ||
         msg.includes("403") ||
@@ -76,16 +86,16 @@ async function withTimeoutAndRetry(operation, timeoutMs = 8000) {
       ) {
         throw formatGeminiError(lastError);
       }
-      if (attempt === 1) {
+      if (attempt === 1 && !msg.includes("404")) {
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
     }
   }
-  throw formatGeminiError(lastError);
+  throw lastError;
 }
 
 /**
- * Shared helper: generateText with timeout, 1 retry, and friendly errors.
+ * Shared helper: generateText with timeout, model fallback, and friendly errors.
  *
  * @param {string} prompt
  * @param {object} [options]
@@ -93,22 +103,35 @@ async function withTimeoutAndRetry(operation, timeoutMs = 8000) {
  */
 export async function generateText(prompt, options = {}) {
   const timeoutMs = options.timeout || 15000;
-  return withTimeoutAndRetry(async () => {
-    const client = getAIClient();
-    const response = await client.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-      config: {
-        temperature: options.temperature ?? 0.7,
-        systemInstruction: options.systemInstruction,
-      },
-    });
-    return response.text || "";
-  }, timeoutMs);
+  let lastErr = null;
+  for (const modelName of FALLBACK_MODELS) {
+    try {
+      return await withTimeoutAndRetry(async () => {
+        const client = getAIClient();
+        const response = await client.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            temperature: options.temperature ?? 0.7,
+            systemInstruction: options.systemInstruction,
+          },
+        });
+        return response.text || "";
+      }, timeoutMs);
+    } catch (err) {
+      lastErr = err;
+      const msg = err?.message || String(err);
+      if (msg.includes("404") || msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("NOT_FOUND")) {
+        continue;
+      }
+      throw formatGeminiError(err);
+    }
+  }
+  throw formatGeminiError(lastErr);
 }
 
 /**
- * Shared helper: generateJSON with Gemini JSON mode, timeout, 1 retry, and friendly errors.
+ * Shared helper: generateJSON with Gemini JSON mode, timeout, model fallback, and friendly errors.
  *
  * @param {string} prompt
  * @param {object} [responseSchema] - Optional GenAI Type schema
@@ -117,29 +140,42 @@ export async function generateText(prompt, options = {}) {
  */
 export async function generateJSON(prompt, responseSchema, options = {}) {
   const timeoutMs = options.timeout || 15000;
-  return withTimeoutAndRetry(async () => {
-    const client = getAIClient();
-    const config = {
-      responseMimeType: "application/json",
-      temperature: options.temperature ?? 0.2,
-      systemInstruction: options.systemInstruction,
-    };
-    if (responseSchema) {
-      config.responseSchema = responseSchema;
-    }
+  let lastErr = null;
+  for (const modelName of FALLBACK_MODELS) {
+    try {
+      return await withTimeoutAndRetry(async () => {
+        const client = getAIClient();
+        const config = {
+          responseMimeType: "application/json",
+          temperature: options.temperature ?? 0.2,
+          systemInstruction: options.systemInstruction,
+        };
+        if (responseSchema) {
+          config.responseSchema = responseSchema;
+        }
 
-    const response = await client.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-      config,
-    });
+        const response = await client.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config,
+        });
 
-    const text = (response.text || "").trim();
-    if (!text) {
-      throw new Error("Empty response received from Gemini.");
+        const text = (response.text || "").trim();
+        if (!text) {
+          throw new Error("Empty response received from Gemini.");
+        }
+        return JSON.parse(text);
+      }, timeoutMs);
+    } catch (err) {
+      lastErr = err;
+      const msg = err?.message || String(err);
+      if (msg.includes("404") || msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("NOT_FOUND")) {
+        continue;
+      }
+      throw formatGeminiError(err);
     }
-    return JSON.parse(text);
-  }, timeoutMs);
+  }
+  throw formatGeminiError(lastErr);
 }
 
 /**
@@ -241,10 +277,10 @@ export function validateExtractedTasks(data) {
  * Uses Gemini JSON mode with TASK_EXTRACTION_SCHEMA and validates the output.
  *
  * @param {string} notes - Meeting notes or transcript text
- * @param {string} [eventContext="HackGenesis 2026"]
+ * @param {string} [eventContext="ChronOps Tech Summit 2026"]
  * @returns {Promise<Array<{ title: string, assignee: string, dueDate: string|null, priority: string }>>}
  */
-export async function extractTasksFromNotes(notes, eventContext = "HackGenesis 2026") {
+export async function extractTasksFromNotes(notes, eventContext = "ChronOps Tech Summit 2026") {
   if (!notes || notes.trim().length === 0) {
     throw new Error("Please provide meeting notes or a voice transcript to extract tasks.");
   }
@@ -428,6 +464,11 @@ export async function generatePhoneticGuide(name) {
     return "";
   }
 
+  const clean = name.trim().toLowerCase();
+  if (PHONETIC_MAP[clean]) {
+    return PHONETIC_MAP[clean];
+  }
+
   const fallback = fallbackPhoneticGuide(name);
 
   if (!API_KEY || API_KEY.trim() === "") {
@@ -466,18 +507,26 @@ Output ONLY the phonetic respelling itself. No preamble, no quotes, no explanati
 }
 
 /**
- * Generates about 60 seconds of warm, spoken filler script (~150 words).
+ * Generates spoken filler script timed according to user-specified duration (~140 words/min).
  *
  * @param {object|string} currentSession
  * @param {object|string} nextSession
- * @param {string} [eventName="HackGenesis 2026"]
+ * @param {string} [eventName="ChronOps Tech Summit 2026"]
+ * @param {number|string} [durationMinutes=1] Duration in minutes requested by user
  * @returns {Promise<string>}
  */
 export async function generateFillerScript(
   currentSession,
   nextSession,
-  eventName = "HackGenesis 2026"
+  eventName = "ChronOps Tech Summit 2026",
+  durationMinutes = 1
 ) {
+  const mins = Math.max(0.5, Math.min(15, parseFloat(durationMinutes) || 1));
+  const targetWords = Math.round(mins * 140);
+  const minWords = Math.round(targetWords * 0.85);
+  const maxWords = Math.round(targetWords * 1.15);
+  const timeDesc = mins === 1 ? "1 minute (60 seconds)" : `${mins} minutes (${Math.round(mins * 60)} seconds)`;
+
   const currentTitle =
     typeof currentSession === "object"
       ? currentSession?.title || "our last presentation"
@@ -490,9 +539,15 @@ export async function generateFillerScript(
     typeof nextSession === "object" && nextSession?.speaker
       ? `featuring ${nextSession.speaker}`
       : "";
-  const event = eventName || "HackGenesis 2026";
+  const event = eventName || "Live Event";
 
-  const fallback = `Hey everyone, give yourselves a massive round of applause for the incredible energy here at ${event}! We just experienced ${currentTitle}, and the level of technical depth and creativity across the auditorium is truly inspiring. While our audio and staging team does a quick mic check and prepares the visuals for what is coming up next, remember to stay hydrated, stretch your legs, and double-check that your GitHub commits are pushing smoothly. In just a few moments, we will be transitioning right into ${nextTitle} ${nextSpeaker}. They will be sharing game-changing strategies on rapid prototype execution and how to win over hackathon juries. So grab your seats, rally your teammates back from the lounge, and let's keep this electric momentum going. You definitely won't want to miss a single second!`;
+  const fallbackPart1 = `Hey everyone, give yourselves a massive round of applause for the incredible energy here at ${event}! We just experienced ${currentTitle}, and the level of technical depth and creativity across the auditorium is truly inspiring. While our audio and staging team does a quick mic check and prepares the visuals for what is coming up next, remember to stay hydrated, stretch your legs, and double-check that your team builds are pushing smoothly. In just a few moments, we will be transitioning right into ${nextTitle} ${nextSpeaker}.`;
+  const fallbackPart2 = ` They will be sharing game-changing strategies on rapid execution and practical implementation. Take this brief window to compare notes with folks around you and recharge. Grab a coffee or water, rally your crew back into their seats, and keep this electric momentum going. You definitely won't want to miss what we have in store next!`;
+  const fallbackPart3 = ` Let's make sure everyone in the overflow lounge knows the session is beginning shortly. We have an exciting lineup through the rest of the day, so stay dialed in and ready!`;
+
+  const fallback = mins <= 1
+    ? `${fallbackPart1}${fallbackPart2}`
+    : `${fallbackPart1}${fallbackPart2}${fallbackPart3}`;
 
   if (!API_KEY || API_KEY.trim() === "") {
     return fallback;
@@ -501,13 +556,13 @@ export async function generateFillerScript(
   try {
     const prompt = `
 You are the live stage anchor and MC at "${event}".
-Generate approximately 60 seconds of spoken filler script (roughly 140 to 160 words) to bridge the gap between sessions while the stage crew sets up.
+Generate approximately ${timeDesc} of spoken filler script (roughly ${minWords} to ${maxWords} words) to bridge the gap between sessions while the stage crew sets up.
 The session that just finished was: "${currentTitle}".
 The upcoming session is: "${nextTitle}" ${nextSpeaker}.
 
 Guidelines:
 - Tone: warm, engaging, motivating, conversational, easy to read aloud smoothly.
-- Word count: around 140 to 160 words (approx. 1 minute at standard speaking pace).
+- Word count: around ${minWords} to ${maxWords} words (timed for ${timeDesc} of natural speaking pace).
 - Remind attendees about hydration, teamwork, or staying on schedule.
 - Build excitement for "${nextTitle}".
 - Output ONLY the spoken words. Do not include sound effect tags, stage directions, or markdown headers.
@@ -515,7 +570,7 @@ Guidelines:
 
     const result = await generateText(prompt, {
       systemInstruction:
-        "You are an enthusiastic hackathon live stage anchor. Provide a natural spoken monologue of about 150 words.",
+        `You are an enthusiastic live stage anchor. Provide a natural spoken monologue of about ${targetWords} words timed for ${timeDesc}.`,
       temperature: 0.7,
       timeout: 10000,
     });
@@ -552,7 +607,7 @@ Immediate action items:
 
 If you encounter any bottlenecks or need volunteer reinforcements, please post immediately in the #ops-urgent Discord channel or contact the Ops Lead.
 
-Thank you for your tireless dedication to keeping HackGenesis running like clockwork!
+Thank you for your tireless dedication to keeping ChronOps running like clockwork!
 
 Best regards,
 Event Operations Command`;
@@ -616,7 +671,7 @@ export async function generateTransition(prevSession, nextSession) {
 
   const fallback = `What a brilliant presentation that was on ${prevTitle} ${prevSpeaker}! A huge thank you for those practical takeaways that will certainly push our hackathon prototypes to the next level.
 
-Now, keeping our momentum surging forward, we are thrilled to welcome ${nextTitle} ${nextSpeaker}. Make sure you have your questions ready as we dive into this next high-impact session of HackGenesis 2026. Let's give a warm welcome as we get underway!`;
+Now, keeping our momentum surging forward, we are thrilled to welcome ${nextTitle} ${nextSpeaker}. Make sure you have your questions ready as we dive into this next high-impact session of ChronOps Tech Summit 2026. Let's give a warm welcome as we get underway!`;
 
   if (!API_KEY || API_KEY.trim() === "") {
     return fallback;
@@ -1007,10 +1062,10 @@ export async function parseEventDocumentWithAI(documentText = "") {
     // Check if location or date are missing in input text
     const missing = [];
     if (!cleanText.toLowerCase().includes("location") && !cleanText.toLowerCase().includes("venue") && !cleanText.toLowerCase().includes("hall")) {
-      missing.push("Venue / Location is not explicitly specified in the document.");
+      missing.push("Venue missing");
     }
     if (!/\b(202\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(cleanText)) {
-      missing.push("Event date is not explicitly specified in the document.");
+      missing.push("Event date missing");
     }
     return { ...fallback, missingDetails: missing };
   }
@@ -1026,7 +1081,7 @@ CRITICAL INSTRUCTIONS:
 1. Extract or infer the main Event: name, category, tagline, date (YYYY-MM-DD), and location.
 2. Extract all live stage Sessions or agenda items with title, speaker, bio, startTime (24h HH:MM), durationMinutes, sessionType ('fixed' or 'flexible'), phoneticGuide, and order.
 3. Extract all actionable operational Tasks for volunteers/organizers with title, assignee, dueDate, dueTime, priority ('low'|'medium'|'high'), and status ('backlog'|'todo').
-4. In 'missingDetails', list any crucial operational information that was completely omitted from the document (e.g., 'Event date is not specified', 'Venue/Location is missing', 'Speaker names not provided').
+4. In 'missingDetails', list any crucial omitted details as very short labels under 4 words (e.g., 'Date missing', 'Venue missing').
 `.trim();
 
   try {
@@ -1087,11 +1142,53 @@ export function detectMissingTranscriptDetails(transcriptText = "", extractedTas
     }
   }
 
+  // Also check if known demo event names are mentioned in the transcript
+  if (!matchedEvent) {
+    if (
+      clean.includes("chronops tech summit 2026") ||
+      clean.includes("chronops summit") ||
+      clean.includes("ai summit 2026") ||
+      clean.includes("club orientation 2026")
+    ) {
+      matchedEvent = { name: "ChronOps Tech Summit 2026" };
+    }
+  }
+
   const missingEvent = !matchedEvent;
   if (missingEvent) {
     missingDetailsList.push({
       type: "event",
-      message: "Target Event Board is not specified in the transcript.",
+      message: "Event board missing",
+    });
+  }
+
+  // Check if date is missing
+  const hasDateMention = /\b(202\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(clean);
+  const missingDate = !hasDateMention;
+  if (missingDate) {
+    missingDetailsList.push({
+      type: "date",
+      message: "Event date missing",
+    });
+  }
+
+  // Check if time is missing
+  const hasTimeMention = /\b(\d{1,2}:\d{2}|\d{1,2}\s*(?:am|pm))\b/i.test(clean);
+  const missingTime = !hasTimeMention;
+  if (missingTime) {
+    missingDetailsList.push({
+      type: "time",
+      message: "Schedule timings missing",
+    });
+  }
+
+  // Check if venue / location is missing
+  const hasVenueMention = /\b(auditorium|hall|lab|room|stage|campus|plaza|center|theatre|complex|venue|online|zoom)\b/i.test(clean);
+  const missingVenue = !hasVenueMention;
+  if (missingVenue) {
+    missingDetailsList.push({
+      type: "venue",
+      message: "Venue / location missing",
     });
   }
 
@@ -1108,23 +1205,303 @@ export function detectMissingTranscriptDetails(transcriptText = "", extractedTas
   if (unassignedTasks.length > 0) {
     missingDetailsList.push({
       type: "assignee",
-      message: `${unassignedTasks.length} task(s) do not have an assignee mentioned (${unassignedTasks.slice(0, 2).join(", ")}${unassignedTasks.length > 2 ? "..." : ""}).`,
+      message: `${unassignedTasks.length} unassigned task(s)`,
     });
   }
 
   if (missingTimingTasks.length > 0) {
     missingDetailsList.push({
       type: "timing",
-      message: `${missingTimingTasks.length} task(s) do not have a due date or timing specified.`,
+      message: `${missingTimingTasks.length} task(s) without deadline`,
     });
   }
 
   return {
     hasMissing: missingDetailsList.length > 0,
     missingEvent,
+    missingDate,
+    missingTime,
+    missingVenue,
     unassignedTasks,
     missingTimingTasks,
     missingDetailsList,
   };
 }
+
+/**
+ * AI Transcript Reframing: Reframes raw explanation/notes into a structured event definition
+ * with suggested title, description, sessions, tasks, and identifies missing details.
+ *
+ * @param {string} rawNotes
+ * @returns {Promise<object>}
+ */
+export async function reframeTranscriptWithAI(rawNotes) {
+  if (!rawNotes || rawNotes.trim().length === 0) {
+    throw new Error("Please provide notes or a transcript to reframe.");
+  }
+
+  const clean = rawNotes.trim();
+
+  // Dynamic heuristic extraction from rawNotes
+  const lines = clean.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+  let extractedName = "ChronOps Innovation Sprint 2026";
+  const titleLine = lines.find((l) => /^(?:event|summit|title|name)\s*[:\-]\s*(.+)$/i.test(l));
+  if (titleLine) {
+    const m = titleLine.match(/^(?:event|summit|title|name)\s*[:\-]\s*(.+)$/i);
+    if (m && m[1].trim()) extractedName = m[1].trim();
+  } else if (lines.length > 0 && lines[0].length <= 70 && !/^\d+[\.\)]/.test(lines[0])) {
+    extractedName = lines[0].replace(/^#+\s*/, "").replace(/^Operations Standup:\s*/i, "").trim() || extractedName;
+  }
+
+  // Location heuristic
+  let extractedLocation = "Campus Main Auditorium";
+  const locMatch = clean.match(/\b(?:in|at|venue:?|location:?)\s+(?:the\s+)?([A-Z][a-zA-Z0-9\s]+(?:Auditorium|Hall|Lab|Plaza|Center|Room|Arena|Campus))/);
+  if (locMatch) {
+    extractedLocation = locMatch[1].trim();
+  }
+
+  // Date heuristic
+  let extractedDate = new Date().toISOString().split("T")[0];
+  const dateMatch = clean.match(/\b(202\d-\d{2}-\d{2})\b/);
+  if (dateMatch) {
+    extractedDate = dateMatch[1];
+  } else if (/\bseptember\s*(\d{1,2})\b/i.test(clean)) {
+    const day = clean.match(/\bseptember\s*(\d{1,2})\b/i)[1].padStart(2, "0");
+    extractedDate = `2026-09-${day}`;
+  }
+
+  // Task candidates
+  const volunteerNames = ["Rahul", "Priya", "Arjun", "Neha", "Meera", "Vikram", "Kavita"];
+  const heuristicTasks = [];
+
+  lines.forEach((line) => {
+    const taskMatch = line.match(/^(?:\d+[\.\)]|[-*•])\s*(.+)$/);
+    if (taskMatch) {
+      const taskText = taskMatch[1].trim();
+      let foundAssignee = "";
+      for (const name of volunteerNames) {
+        if (new RegExp(`\\b${name}\\b`, "i").test(taskText)) {
+          foundAssignee = name;
+          break;
+        }
+      }
+
+      let priority = "medium";
+      if (/\b(urgent|high|priority|blocking|asap|crucial)\b/i.test(taskText)) {
+        priority = "high";
+      } else if (/\b(optional|low|nice to have|polish)\b/i.test(taskText)) {
+        priority = "low";
+      }
+
+      let dDate = null;
+      if (/\b(202\d-\d{2}-\d{2})\b/.test(taskText)) {
+        dDate = taskText.match(/\b(202\d-\d{2}-\d{2})\b/)[1];
+      } else if (/\bseptember\s*(\d{1,2})\b/i.test(taskText)) {
+        const d = taskText.match(/\bseptember\s*(\d{1,2})\b/i)[1].padStart(2, "0");
+        dDate = `2026-09-${d}`;
+      }
+
+      let dTime = null;
+      if (/\b(\d{1,2}:\d{2})\b/.test(taskText)) {
+        dTime = taskText.match(/\b(\d{1,2}:\d{2})\b/)[1].padStart(5, "0");
+      }
+
+      heuristicTasks.push({
+        title: taskText.length > 100 ? taskText.slice(0, 97) + "..." : taskText,
+        assignee: foundAssignee,
+        dueDate: dDate,
+        dueTime: dTime,
+        priority,
+        status: "todo",
+      });
+    }
+  });
+
+  // Default fallback object
+  const fallback = {
+    suggestedName: extractedName,
+    tagline: "High-Velocity Event Management & Execution",
+    category: "Flagship Hackathon",
+    description: `Event organized from transcript briefings with ${heuristicTasks.length || 3} key operational vectors.`,
+    date: extractedDate,
+    location: extractedLocation,
+    sessions: [
+      {
+        title: "Welcome & Opening Briefing",
+        speaker: "Organizing Committee",
+        startTime: "09:00",
+        durationMinutes: 30,
+        sessionType: "fixed",
+      },
+      {
+        title: "Keynote & Problem Statements",
+        speaker: "Dr. Ananya Mukherjee",
+        startTime: "09:30",
+        durationMinutes: 45,
+        sessionType: "flexible",
+      },
+    ],
+    tasks: heuristicTasks.length > 0 ? heuristicTasks : [
+      {
+        title: "Setup registration desk and welcome banner",
+        assignee: "Rahul",
+        dueDate: extractedDate,
+        dueTime: "08:30",
+        priority: "high",
+        status: "todo",
+      },
+      {
+        title: "Coordinate audio/video recording for keynote",
+        assignee: "Priya",
+        dueDate: extractedDate,
+        dueTime: "09:15",
+        priority: "medium",
+        status: "todo",
+      },
+    ],
+    missingDetails: [],
+  };
+
+  const missing = [];
+  if (!/\b(auditorium|hall|lab|room|stage|campus|plaza|center|theatre|complex|venue|online)\b/i.test(clean)) {
+    missing.push("Venue missing");
+  }
+  if (!/\b(202\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|today|tomorrow)\b/i.test(clean)) {
+    missing.push("Event date missing");
+  }
+  if (!/\b(\d{1,2}:\d{2}|\d{1,2}\s*(?:am|pm))\b/i.test(clean)) {
+    missing.push("Schedule timings missing");
+  }
+
+  fallback.missingDetails = missing;
+
+  if (!API_KEY || API_KEY.trim() === "" || API_KEY === "your_gemini_api_key_from_ai_studio") {
+    return fallback;
+  }
+
+  const prompt = `
+You are an expert event architect AI. Analyze this transcript or raw event briefing:
+
+"""
+${clean}
+"""
+
+YOUR TASK:
+1. Reframe and synthesize this explanation into a professional event specification:
+   - suggestedName: A catchy, professional name for the event (e.g., "ChronOps AI Sprint 2026").
+   - tagline: A concise, memorable 1-line subtitle.
+   - description: A clear 2-3 sentence overview of the event purpose and scope.
+   - category: One of "Flagship Hackathon", "Tech Conference", "Campus Drive", "Workshop & Bootcamp", "Competition", or "Other".
+   - date: Event date in YYYY-MM-DD format if mentioned, or null.
+   - location: Event venue/hall if mentioned, or null.
+2. Extract 2-4 key live sessions with title, speaker, startTime (HH:MM), durationMinutes (number), sessionType ('fixed'|'flexible').
+3. Extract 3-5 operational tasks for organizers with title, assignee, dueDate, dueTime, priority ('high'|'medium'|'low'), and status ('todo'|'backlog').
+4. In 'missingDetails', list any crucial omitted details as short tags under 4 words (e.g. 'Date missing', 'Venue missing', 'Timings missing').
+`.trim();
+
+  try {
+    const parsed = await generateJSON(prompt, {
+      type: Type.OBJECT,
+      properties: {
+        suggestedName: { type: Type.STRING },
+        tagline: { type: Type.STRING },
+        description: { type: Type.STRING },
+        category: { type: Type.STRING },
+        date: { type: Type.STRING },
+        location: { type: Type.STRING },
+        sessions: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              speaker: { type: Type.STRING },
+              startTime: { type: Type.STRING },
+              durationMinutes: { type: Type.NUMBER },
+              sessionType: { type: Type.STRING },
+            },
+            required: ["title", "startTime", "durationMinutes"],
+          },
+        },
+        tasks: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              assignee: { type: Type.STRING },
+              dueDate: { type: Type.STRING },
+              dueTime: { type: Type.STRING },
+              priority: { type: Type.STRING },
+              status: { type: Type.STRING },
+            },
+            required: ["title", "priority", "status"],
+          },
+        },
+        missingDetails: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+      },
+      required: ["suggestedName", "tagline", "description", "tasks", "missingDetails"],
+    }, {
+      temperature: 0.2,
+      timeout: 15000,
+    });
+
+    const rawSessions = parsed?.sessions?.length ? parsed.sessions : fallback.sessions;
+    const cleanSessions = rawSessions.map((s, idx) => {
+      let startTime = "10:00";
+      if (s.startTime && typeof s.startTime === "string") {
+        const match = s.startTime.match(/(\d{1,2}):(\d{2})/);
+        if (match) {
+          startTime = `${match[1].padStart(2, "0")}:${match[2]}`;
+        }
+      }
+      return {
+        title: (s.title || `Session ${idx + 1}`).trim(),
+        speaker: (s.speaker || "").trim(),
+        startTime,
+        durationMinutes: Number(s.durationMinutes) > 0 ? Number(s.durationMinutes) : 30,
+        sessionType: s.sessionType === "fixed" ? "fixed" : "flexible",
+        order: idx + 1,
+      };
+    });
+
+    const rawTasks = parsed?.tasks?.length ? parsed.tasks : fallback.tasks;
+    const cleanTasks = rawTasks.map((t) => {
+      let priority = (t.priority || "medium").toLowerCase().trim();
+      if (!["low", "medium", "high"].includes(priority)) priority = "medium";
+      return {
+        title: (t.title || "Operational task").trim(),
+        assignee: (t.assignee || "").trim(),
+        dueDate: t.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(t.dueDate.trim()) ? t.dueDate.trim() : null,
+        dueTime: t.dueTime && /^\d{1,2}:\d{2}$/.test(t.dueTime.trim()) ? t.dueTime.trim() : null,
+        priority,
+        status: t.status === "in_progress" || t.status === "todo" ? t.status : "backlog",
+      };
+    });
+
+    const detectedMissing = Array.isArray(parsed?.missingDetails) && parsed.missingDetails.length > 0
+      ? parsed.missingDetails
+      : missing;
+
+    return {
+      suggestedName: parsed?.suggestedName?.trim() || fallback.suggestedName,
+      tagline: parsed?.tagline?.trim() || fallback.tagline,
+      description: parsed?.description?.trim() || fallback.description,
+      category: parsed?.category?.trim() || fallback.category,
+      date: parsed?.date?.trim() || fallback.date,
+      location: parsed?.location?.trim() || fallback.location,
+      sessions: cleanSessions,
+      tasks: cleanTasks,
+      missingDetails: detectedMissing,
+    };
+  } catch (err) {
+    console.warn("reframeTranscriptWithAI failed, returning fallback:", err);
+    return fallback;
+  }
+}
+
 

@@ -9,7 +9,7 @@ import {
   onAuthStateChanged,
 } from "../services/firebase";
 
-const LOCAL_AUTH_KEY = "clubops_demo_auth";
+const SESSION_AUTH_KEY = "clubops_session_auth";
 
 const AuthContext = createContext(null);
 
@@ -19,7 +19,21 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // 1. If Firebase Auth is configured and active, listen to auth state changes
+    // Clear any stale legacy localStorage auth so user is prompted to login first
+    try {
+      localStorage.removeItem("clubops_demo_auth");
+      localStorage.removeItem("clubops_user_role");
+    } catch (e) {}
+
+    // Check if user already logged in during this browser session
+    try {
+      const sessionUser = sessionStorage.getItem(SESSION_AUTH_KEY);
+      if (sessionUser) {
+        setUser(JSON.parse(sessionUser));
+      }
+    } catch (e) {}
+
+    // If Firebase Auth is configured and active, listen to auth state changes
     if (isFirebaseConfigured && auth) {
       const unsubscribe = onAuthStateChanged(
         auth,
@@ -27,26 +41,42 @@ export function AuthProvider({ children }) {
           if (firebaseUser) {
             const mapped = {
               uid: firebaseUser.uid,
-              email: firebaseUser.email || (firebaseUser.isAnonymous ? "demo@hackgenesis.io" : ""),
-              displayName: firebaseUser.displayName || (firebaseUser.isAnonymous ? "Demo Organizer" : "User"),
-              photoURL: firebaseUser.photoURL || null,
+              email: firebaseUser.email || (firebaseUser.isAnonymous ? "volunteer@chronops.io" : ""),
+              displayName:
+                firebaseUser.displayName ||
+                (firebaseUser.isAnonymous ? "ChronOps Volunteer" : "Google User"),
+              photoURL:
+                firebaseUser.photoURL ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  firebaseUser.displayName || "Google User"
+                )}&background=4285F4&color=fff&bold=true`,
               isAnonymous: firebaseUser.isAnonymous,
+              provider: firebaseUser.isAnonymous ? "demo" : "google.com",
             };
             setUser(mapped);
             try {
-              localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify(mapped));
+              sessionStorage.setItem(SESSION_AUTH_KEY, JSON.stringify(mapped));
+              localStorage.setItem("clubops_current_user_email", mapped.email || mapped.uid);
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+              }
             } catch (e) {}
           } else {
-            // Check if there is an active local demo session before wiping to null!
+            // If Firebase has no user and sessionStorage has no user, ensure user is null
             try {
-              const savedUser = localStorage.getItem(LOCAL_AUTH_KEY);
-              if (savedUser) {
-                setUser(JSON.parse(savedUser));
+              const sessionUser = sessionStorage.getItem(SESSION_AUTH_KEY);
+              if (sessionUser) {
+                const parsed = JSON.parse(sessionUser);
+                setUser(parsed);
+                localStorage.setItem("clubops_current_user_email", parsed.email || parsed.uid);
                 setLoading(false);
                 return;
               }
             } catch (e) {}
             setUser(null);
+            try {
+              localStorage.removeItem("clubops_current_user_email");
+            } catch (e) {}
           }
           setLoading(false);
         },
@@ -59,23 +89,39 @@ export function AuthProvider({ children }) {
       return () => unsubscribe();
     }
 
-    // 2. If Firebase is not configured, check localStorage for persistent demo user
-    try {
-      const savedUser = localStorage.getItem(LOCAL_AUTH_KEY);
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
-      }
-    } catch (e) {
-      console.warn("Could not parse saved auth from localStorage:", e);
-    }
     setLoading(false);
   }, []);
 
   // ─── Google Sign-In ───
-  const signInWithGoogle = useCallback(async () => {
+  const signInWithGoogle = useCallback(async (customGoogleUser = null) => {
     setError(null);
     setLoading(true);
+
     try {
+      // 1. If custom Google user provided (e.g. from Google Account modal or fallback)
+      if (customGoogleUser && customGoogleUser.email) {
+        const mapped = {
+          uid: customGoogleUser.uid || "google-" + Date.now().toString(36),
+          email: customGoogleUser.email,
+          displayName: customGoogleUser.displayName || "Google User",
+          photoURL:
+            customGoogleUser.photoURL ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(
+              customGoogleUser.displayName || "Google User"
+            )}&background=4285F4&color=fff&bold=true`,
+          isAnonymous: false,
+          provider: "google.com",
+        };
+        sessionStorage.setItem(SESSION_AUTH_KEY, JSON.stringify(mapped));
+        localStorage.setItem("clubops_current_user_email", mapped.email || mapped.uid);
+        setUser(mapped);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+        }
+        return mapped;
+      }
+
+      // 2. Try Firebase Google Popup
       if (isFirebaseConfigured && auth && googleProvider) {
         try {
           const result = await signInWithPopup(auth, googleProvider);
@@ -84,41 +130,27 @@ export function AuthProvider({ children }) {
             uid: fbUser.uid,
             email: fbUser.email,
             displayName: fbUser.displayName || "Google User",
-            photoURL: fbUser.photoURL,
+            photoURL:
+              fbUser.photoURL ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                fbUser.displayName || "Google User"
+              )}&background=4285F4&color=fff&bold=true`,
             isAnonymous: false,
+            provider: "google.com",
           };
-          localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify(mapped));
+          sessionStorage.setItem(SESSION_AUTH_KEY, JSON.stringify(mapped));
+          localStorage.setItem("clubops_current_user_email", mapped.email || mapped.uid);
           setUser(mapped);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+          }
           return mapped;
         } catch (fbErr) {
-          console.warn("Firebase Google Auth failed (falling back to local session):", fbErr);
-          if (fbErr.code === "auth/popup-closed-by-user") {
-            throw fbErr;
-          }
-          // Fall back to local Google user simulation
-          const mockUser = {
-            uid: "google-lead-" + Date.now().toString(36),
-            email: "lead@clubops.studio",
-            displayName: "Hack Lead (Google Demo)",
-            photoURL: null,
-            isAnonymous: false,
-          };
-          localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify(mockUser));
-          setUser(mockUser);
-          return mockUser;
+          console.warn("Firebase Google Auth popup error:", fbErr);
+          throw fbErr;
         }
       } else {
-        // Local simulation for Google sign-in
-        const mockUser = {
-          uid: "google-lead-" + Date.now().toString(36),
-          email: "lead@clubops.studio",
-          displayName: "Hack Lead (Google Demo)",
-          photoURL: null,
-          isAnonymous: false,
-        };
-        localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify(mockUser));
-        setUser(mockUser);
-        return mockUser;
+        throw new Error("Firebase Auth is not configured");
       }
     } catch (err) {
       console.error("Google sign in failed:", err);
@@ -129,10 +161,15 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  // ─── Continue as Demo (Anonymous) ───
+  // ─── Continue as Demo ───
   const signInDemo = useCallback(async () => {
     setError(null);
     setLoading(true);
+
+    const displayName = "ChronOps Demo User";
+    const email = "demo@chronops.io";
+    const uid = "demo-user-uid";
+
     try {
       if (isFirebaseConfigured && auth) {
         try {
@@ -140,41 +177,39 @@ export function AuthProvider({ children }) {
           const fbUser = result.user;
           const mapped = {
             uid: fbUser.uid,
-            email: "demo@hackgenesis.io",
-            displayName: "HackGenesis Lead (Demo)",
+            email: email,
+            displayName: displayName,
             photoURL: null,
             isAnonymous: true,
+            provider: "demo",
           };
-          localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify(mapped));
+          sessionStorage.setItem(SESSION_AUTH_KEY, JSON.stringify(mapped));
+          localStorage.setItem("clubops_current_user_email", email);
           setUser(mapped);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+          }
           return mapped;
         } catch (fbErr) {
           console.warn("Firebase Anonymous Auth not enabled in console, using local demo:", fbErr);
-          // Fall back seamlessly to local demo user
-          const demoUser = {
-            uid: "demo-lead-uid",
-            email: "demo@hackgenesis.io",
-            displayName: "HackGenesis Lead (Demo)",
-            photoURL: null,
-            isAnonymous: true,
-          };
-          localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify(demoUser));
-          setUser(demoUser);
-          return demoUser;
         }
-      } else {
-        // Local simulation for demo anonymous user
-        const demoUser = {
-          uid: "demo-lead-uid",
-          email: "demo@hackgenesis.io",
-          displayName: "HackGenesis Lead (Demo)",
-          photoURL: null,
-          isAnonymous: true,
-        };
-        localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify(demoUser));
-        setUser(demoUser);
-        return demoUser;
       }
+
+      const demoUser = {
+        uid: uid,
+        email: email,
+        displayName: displayName,
+        photoURL: null,
+        isAnonymous: true,
+        provider: "demo",
+      };
+      sessionStorage.setItem(SESSION_AUTH_KEY, JSON.stringify(demoUser));
+      localStorage.setItem("clubops_current_user_email", email);
+      setUser(demoUser);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+      }
+      return demoUser;
     } catch (err) {
       console.error("Demo sign in failed:", err);
       setError(err.message || "Failed to continue as demo.");
@@ -184,6 +219,31 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // ─── Volunteer / Participant Sign In ───
+  const signInVolunteer = useCallback(async (name, email) => {
+    setError(null);
+    setLoading(true);
+
+    const userObj = {
+      uid: "volunteer-" + Date.now().toString(36),
+      displayName: name || "Event Volunteer",
+      email: email || "volunteer@chronops.io",
+      photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(
+        name || "Volunteer"
+      )}&background=00E5FF&color=000&bold=true`,
+      isAnonymous: false,
+      provider: "volunteer",
+    };
+    sessionStorage.setItem(SESSION_AUTH_KEY, JSON.stringify(userObj));
+    localStorage.setItem("clubops_current_user_email", userObj.email);
+    setUser(userObj);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("clubops-data-updated"));
+    }
+    setLoading(false);
+    return userObj;
+  }, []);
+
   // ─── Sign Out ───
   const signOutUser = useCallback(async () => {
     setError(null);
@@ -191,11 +251,18 @@ export function AuthProvider({ children }) {
       if (isFirebaseConfigured && auth && auth.currentUser) {
         await signOut(auth);
       }
-      localStorage.removeItem(LOCAL_AUTH_KEY);
-      setUser(null);
     } catch (err) {
-      console.error("Sign out failed:", err);
-      setError(err.message || "Failed to sign out.");
+      console.warn("Firebase sign out error:", err);
+    }
+    sessionStorage.removeItem(SESSION_AUTH_KEY);
+    try {
+      localStorage.removeItem("clubops_current_user_email");
+      localStorage.removeItem("clubops_demo_auth");
+      localStorage.removeItem("clubops_user_role");
+    } catch (e) {}
+    setUser(null);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("clubops-data-updated"));
     }
   }, []);
 
@@ -205,8 +272,9 @@ export function AuthProvider({ children }) {
     error,
     signInWithGoogle,
     signInDemo,
+    signInVolunteer,
     signOutUser,
-    isDemo: user?.isAnonymous || user?.uid === "demo-lead-uid" || !isFirebaseConfigured,
+    isDemo: user?.isAnonymous || user?.uid?.startsWith("demo-") || !isFirebaseConfigured,
     isFirebaseConfigured,
   };
 

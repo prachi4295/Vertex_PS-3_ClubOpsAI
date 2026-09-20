@@ -91,13 +91,13 @@ export default function QuickAITools() {
 
   // 1. 1-Min Filler Script
   const handleFillerScript = () => {
-    const cur = liveSession || { title: "HackGenesis Main Stage Welcome" };
+    const cur = liveSession || { title: "ChronOps Main Stage Welcome" };
     const nxt = nextSession || { title: "Next-Gen AI Builders Keynote", speaker: "Dr. Ananya Mukherjee" };
 
     runAITool(
       "filler",
       "1-Min Filler Script",
-      () => generateFillerScript(cur, nxt, "HackGenesis 2026"),
+      () => generateFillerScript(cur, nxt, "ChronOps Tech Summit 2026"),
       `AI generated 1-min filler script for stage anchor.`
     );
   };
@@ -105,7 +105,7 @@ export default function QuickAITools() {
   // 2. Draft Volunteer Email
   const handleVolunteerEmail = () => {
     const context = {
-      event: "HackGenesis 2026",
+      event: "ChronOps Tech Summit 2026",
       liveSession: liveSession?.title || "Keynote Presentation",
       nextSession: nextSession?.title || "Sponsor Workshop",
       operationalNote: "Schedule reflow applied (+10m). Ushers and stage crew please synchronize timer displays.",

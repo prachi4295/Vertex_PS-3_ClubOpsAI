@@ -21,8 +21,12 @@ import Button from "../components/ui/Button";
 import { INITIAL_EVENTS } from "../data/multiEvents";
 import { useTasks } from "../hooks/useTasks";
 import { useApp } from "../hooks/useApp";
-
-const LOCAL_EVENTS_STORAGE_KEY = "clubops_all_events_list";
+import {
+  getStoredEvents,
+  saveStoredEvents,
+  removeStoredTasks,
+  removeStoredSessions,
+} from "../lib/storage";
 
 /**
  * Dedicated webpage for an event's full taskboard.
@@ -35,17 +39,21 @@ export default function EventTaskboardPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [eventOverride, setEventOverride] = useState(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => setRefreshTick((t) => t + 1);
+    window.addEventListener("clubops-data-updated", handleUpdate);
+    return () => window.removeEventListener("clubops-data-updated", handleUpdate);
+  }, []);
 
   // Retrieve event metadata from storage or presets
   const event = useMemo(() => {
     if (eventOverride) return eventOverride;
     try {
-      const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
-      if (saved) {
-        const list = JSON.parse(saved);
-        const found = list.find((e) => e.id === eventId);
-        if (found) return found;
-      }
+      const list = getStoredEvents();
+      const found = list.find((e) => e.id === eventId);
+      if (found) return found;
     } catch (e) {
       console.warn("Failed to load event metadata:", e);
     }
@@ -62,7 +70,7 @@ export default function EventTaskboardPage() {
       location: "Campus Venue",
       color: "secondary",
     };
-  }, [eventId, eventOverride]);
+  }, [eventId, eventOverride, refreshTick]);
 
   const { tasks } = useTasks(eventId);
 
@@ -85,11 +93,11 @@ export default function EventTaskboardPage() {
 
   const handleDeleteBoard = () => {
     try {
-      const saved = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
-      const list = saved ? JSON.parse(saved) : INITIAL_EVENTS;
+      const list = getStoredEvents();
       const updated = list.filter((e) => e.id !== eventId);
-      localStorage.setItem(LOCAL_EVENTS_STORAGE_KEY, JSON.stringify(updated));
-      localStorage.removeItem(`clubops_tasks_${eventId}`);
+      saveStoredEvents(updated);
+      removeStoredTasks(eventId);
+      removeStoredSessions(eventId);
     } catch (e) {
       console.warn("Failed to delete event board:", e);
     }
@@ -142,7 +150,7 @@ export default function EventTaskboardPage() {
           <div className="space-y-2 flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Badge
-                color={event.id === "hackgenesis-2026" ? "accent" : "secondary"}
+                color={event.id === "chronops-summit-2026" ? "accent" : "secondary"}
                 className="!text-xs !px-3 !py-0.5 font-black uppercase !border-2"
               >
                 {event.category}

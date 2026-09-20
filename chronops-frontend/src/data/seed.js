@@ -10,19 +10,19 @@ import {
 } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "../services/firebase";
 
-export const DEMO_EVENT_ID = "hackgenesis-2026";
+export const DEMO_EVENT_ID = "chronops-summit-2026";
 
 /**
  * Demo event object
  */
 export const SEED_EVENT = {
   id: DEMO_EVENT_ID,
-  name: "HackGenesis 2026",
+  name: "ChronOps Tech Summit 2026",
   date: Timestamp.fromDate(new Date("2026-09-19T09:00:00")),
   status: "active",
   ownerId: "demo-lead-uid",
   location: "Main Auditorium & Innovation Labs",
-  description: "Flagship 36-hour national hackathon & AI builders stage.",
+  description: "Flagship 36-hour national tech summit & AI builders stage.",
 };
 
 /**
@@ -205,7 +205,7 @@ export const SEED_SESSIONS = [
     phoneticGuide: "Prof. S. R. RAH-oh",
     order: 1,
     actualStart: Timestamp.fromDate(new Date("2026-09-19T09:02:00")),
-    script: "Honored guests, esteemed faculty, and vibrant builders of HackGenesis...",
+    script: "Honored guests, esteemed faculty, and vibrant builders of ChronOps Summit...",
   },
   // 2. Flexible Keynote
   {
@@ -369,7 +369,7 @@ export const LOCAL_TASKS_KEY = `clubops_tasks_${DEMO_EVENT_ID}`;
 export const LOCAL_SESSIONS_KEY = `clubops_sessions_${DEMO_EVENT_ID}`;
 
 /**
- * Creates "HackGenesis 2026" with 12 tasks and 10 sessions.
+ * Creates "ChronOps Tech Summit 2026" with 12 tasks and 10 sessions.
  * Writes to Firestore if configured, or localStorage if offline/demo.
  *
  * @param {string} ownerId - Current authenticated user ID
@@ -497,6 +497,6 @@ function seedToLocalStorage(ownerId) {
     localStorage.setItem(LOCAL_EVENT_KEY, JSON.stringify(event));
     localStorage.setItem(LOCAL_TASKS_KEY, JSON.stringify(tasks));
     localStorage.setItem(LOCAL_SESSIONS_KEY, JSON.stringify(sessions));
-    console.info("Local storage seeded cleanly for HackGenesis 2026.");
+    console.info("Local storage seeded cleanly for ChronOps Tech Summit 2026.");
   }
 }

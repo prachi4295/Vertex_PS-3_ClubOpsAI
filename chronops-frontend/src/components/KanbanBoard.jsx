@@ -13,13 +13,14 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Columns3, Check, Plus } from "lucide-react";
+import { Columns3, Check, Plus, Trash2, CheckSquare, Square, X } from "lucide-react";
 import { Card, Badge } from "./ui";
 import Button from "./ui/Button";
 import TaskCard from "./TaskCard";
 import TaskModal from "./TaskModal";
 import { useApp } from "../hooks/useApp";
 import { useTasks } from "../hooks/useTasks";
+import { useNotifications } from "../hooks/useNotifications";
 
 const COLUMNS = [
   { key: "backlog", label: "Backlog", color: "bg-neo-muted" },
@@ -36,7 +37,7 @@ const COLUMNS = [
 
 /**
  * Full Kanban board with @dnd-kit drag-and-drop, search filtering,
- * loading skeletons, empty states, and CRUD modal.
+ * loading skeletons, empty states, and Multi-Task Deletion (Item 8).
  */
 export default function KanbanBoard({
   eventId,
@@ -44,11 +45,17 @@ export default function KanbanBoard({
   onCollapse,
 }) {
   const { searchQuery } = useApp();
-  const { tasks, loading, error, moveTask } = useTasks(eventId);
+  const { tasks, loading, error, moveTask, deleteTasksBatch } = useTasks(eventId);
+  const { addNotification } = useNotifications();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [activeId, setActiveId] = useState(null);
+
+  // Multi-selection state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
 
   const query = searchQuery.toLowerCase();
 
@@ -82,24 +89,23 @@ export default function KanbanBoard({
     : null;
 
   function handleDragStart(event) {
+    if (selectMode) return;
     setActiveId(event.active.id);
   }
 
   function handleDragEnd(event) {
+    if (selectMode) return;
     const { active, over } = event;
     setActiveId(null);
     if (!over) return;
 
     const taskId = active.id;
-    // Determine target column: `over.id` is either a task id or a column droppable id
     let targetStatus = null;
 
-    // Check if dropped over a column droppable
     const col = COLUMNS.find((c) => c.key === over.id);
     if (col) {
       targetStatus = col.key;
     } else {
-      // Dropped over another task — find that task's status
       const overTask = tasks.find((t) => t.id === over.id);
       if (overTask) targetStatus = overTask.status;
     }
@@ -118,6 +124,10 @@ export default function KanbanBoard({
   }
 
   function openEditTask(task) {
+    if (selectMode) {
+      toggleSelectTask(task.id);
+      return;
+    }
     setEditingTask(task);
     setModalOpen(true);
   }
@@ -126,7 +136,49 @@ export default function KanbanBoard({
     moveTask(taskId, newStatus);
   }
 
-  // ─── Loading skeleton ───
+  // Multi-select handlers
+  const toggleSelectTask = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    setSelectedIds(new Set(tasks.map((t) => t.id)));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (window.confirm(`Are you sure you want to permanently delete ${count} selected tasks?`)) {
+      setIsDeletingBulk(true);
+      try {
+        await deleteTasksBatch(Array.from(selectedIds));
+        addNotification({
+          message: `Successfully deleted ${count} tasks in batch.`,
+          type: "action",
+        });
+        setSelectedIds(new Set());
+        setSelectMode(false);
+      } catch (err) {
+        console.error("Failed to delete selected tasks:", err);
+      } finally {
+        setIsDeletingBulk(false);
+      }
+    }
+  };
+
+  // ─── Loading state ───
   if (loading) {
     return (
       <Card
@@ -197,12 +249,34 @@ export default function KanbanBoard({
     <>
       <Card
         headerContent={
-          <span className="flex items-center justify-between w-full">
+          <span className="flex items-center justify-between w-full flex-wrap gap-2">
             <span className="flex items-center gap-2">
               <Columns3 size={16} strokeWidth={3} />
               <span>{eventTitle}</span>
+              <span className="text-xs font-bold text-neo-ink/50 ml-1">
+                ({tasks.length} tasks)
+              </span>
             </span>
             <span className="flex items-center gap-2">
+              {/* Toggle Multi-Select Mode */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectMode(!selectMode);
+                  if (selectMode) setSelectedIds(new Set());
+                }}
+                className={[
+                  "h-7 text-[10px] font-black uppercase px-2.5 border-2 border-neo-ink shadow-[2px_2px_0_#000] cursor-pointer transition-all active:translate-x-[1px] active:translate-y-[1px] flex items-center gap-1",
+                  selectMode
+                    ? "bg-neo-accent text-neo-white"
+                    : "bg-neo-white hover:bg-neo-secondary text-neo-ink",
+                ].join(" ")}
+                title="Select multiple tasks to delete"
+              >
+                <CheckSquare size={12} strokeWidth={3} />
+                <span>{selectMode ? "Exit Select" : "Multi-Select"}</span>
+              </button>
+
               <Button
                 variant="secondary"
                 size="sm"
@@ -228,6 +302,53 @@ export default function KanbanBoard({
         headerColor="bg-neo-white"
         noPadding
       >
+        {/* Bulk Action Toolbar when Multi-Select is active */}
+        {selectMode && (
+          <div className="p-2.5 bg-neo-ink text-neo-white border-b-4 border-neo-ink flex items-center justify-between flex-wrap gap-2 animate-fade-in">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black uppercase tracking-wider text-neo-secondary">
+                {selectedIds.size} / {tasks.length} Selected
+              </span>
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="text-[10px] font-bold uppercase underline hover:text-neo-secondary cursor-pointer bg-transparent border-0 text-neo-white px-1"
+              >
+                Select All
+              </button>
+              <span>•</span>
+              <button
+                type="button"
+                onClick={handleDeselectAll}
+                className="text-[10px] font-bold uppercase underline hover:text-neo-secondary cursor-pointer bg-transparent border-0 text-neo-white px-1"
+              >
+                Deselect
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={selectedIds.size === 0 || isDeletingBulk}
+                onClick={handleDeleteSelected}
+                className={[
+                  "px-3 py-1 bg-neo-accent text-neo-white border-2 border-neo-white font-black text-xs uppercase flex items-center gap-1.5 shadow-[2px_2px_0_#FFF]",
+                  selectedIds.size === 0
+                    ? "opacity-50 cursor-not-allowed"
+                    : "cursor-pointer active:translate-x-[1px] active:translate-y-[1px] hover:bg-neo-accent/90",
+                ].join(" ")}
+              >
+                <Trash2 size={13} strokeWidth={3} />
+                <span>
+                  {isDeletingBulk
+                    ? "Deleting..."
+                    : `Delete Selected (${selectedIds.size})`}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -245,6 +366,9 @@ export default function KanbanBoard({
                   query={query}
                   onEdit={openEditTask}
                   onMove={handleMove}
+                  selectMode={selectMode}
+                  selectedIds={selectedIds}
+                  onToggleSelect={toggleSelectTask}
                 />
               );
             })}
@@ -260,12 +384,10 @@ export default function KanbanBoard({
         </DndContext>
       </Card>
 
+      {/* Task Modal */}
       <TaskModal
         open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setEditingTask(null);
-        }}
+        onClose={() => setModalOpen(false)}
         task={editingTask}
         eventId={eventId}
       />
@@ -275,7 +397,16 @@ export default function KanbanBoard({
 
 /* ─── Column component with droppable ─── */
 
-function KanbanColumn({ column, tasks, query, onEdit, onMove }) {
+function KanbanColumn({
+  column,
+  tasks,
+  query,
+  onEdit,
+  onMove,
+  selectMode,
+  selectedIds,
+  onToggleSelect,
+}) {
   const ColIcon = column.icon;
   const { setNodeRef, isOver } = useDroppable({ id: column.key });
 
@@ -327,6 +458,9 @@ function KanbanColumn({ column, tasks, query, onEdit, onMove }) {
                 task={task}
                 onEdit={onEdit}
                 onMove={onMove}
+                selectMode={selectMode}
+                isSelected={selectedIds?.has(task.id)}
+                onToggleSelect={onToggleSelect}
               />
             ))
           )}

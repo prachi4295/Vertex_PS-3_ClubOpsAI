@@ -12,6 +12,11 @@ import {
   Sparkles,
   AlertTriangle,
   Bot,
+  Mail,
+  Palette,
+  Shield,
+  Layers,
+  X,
 } from "lucide-react";
 import { Badge, Input, Dropdown } from "./ui";
 import { useApp } from "../hooks/useApp";
@@ -20,15 +25,25 @@ import { useAuth } from "../hooks/useAuth";
 import Button from "./ui/Button";
 import TaskModal from "./TaskModal";
 import EditStageModal from "./EditStageModal";
+import VolunteerEmailModal from "./VolunteerEmailModal";
+import EventPosterModal from "./EventPosterModal";
 import { useSessions } from "../hooks/useSessions";
+import { INITIAL_EVENTS } from "../data/multiEvents";
 
 export default function Header() {
-  const { mode, setMode, goLive, searchQuery, setSearchQuery } = useApp();
-  const { notifications, markAllRead, unreadCount } = useNotifications();
+  const {
+    notifications,
+    markAllRead,
+    clearAll,
+    removeNotification,
+    unreadCount,
+  } = useNotifications();
   const { user, signOutUser } = useAuth();
   const { sessions, startSession } = useSessions();
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [stageModalOpen, setStageModalOpen] = useState(false);
+  const [volunteerModalOpen, setVolunteerModalOpen] = useState(false);
+  const [posterModalOpen, setPosterModalOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -41,26 +56,7 @@ export default function Header() {
 
   const handleBrandClick = () => {
     setMode("operations");
-    if (location.pathname !== "/") {
-      navigate("/");
-    }
-  };
-
-  const handleGoLive = async () => {
-    goLive();
-    if (location.pathname !== "/") {
-      navigate("/");
-    }
-    const upcoming = sessions
-      .filter((s) => s.status === "upcoming")
-      .sort(
-        (a, b) =>
-          (a.order || 0) - (b.order || 0) ||
-          (a.startTime || "").localeCompare(b.startTime || "")
-      );
-    if (upcoming.length > 0) {
-      await startSession(upcoming[0].id);
-    }
+    navigate("/");
   };
 
   return (
@@ -72,17 +68,18 @@ export default function Header() {
             type="button"
             onClick={handleBrandClick}
             className="flex items-center gap-2 shrink-0 cursor-pointer border-0 bg-transparent p-0"
-            title="Return to ChronOpsAI Operations"
+            title="Go to ChronOps Home"
+            aria-label="ChronOps Home"
           >
             <span className="bg-neo-accent border-4 border-neo-ink px-3 py-1 font-black text-sm tracking-tight text-neo-ink shadow-neo-sm hover:shadow-neo transition-all active:translate-x-[1px] active:translate-y-[1px]">
-              ChronOpsAI
+              ChronOps
             </span>
           </button>
 
           {/* ─── Mode tabs ─── */}
           <nav className="hidden md:flex items-center ml-4 gap-1" role="tablist" aria-label="App mode">
             <ModeTab
-              label="Operations"
+              label="Live Flow"
               active={location.pathname === "/" && mode === "operations"}
               onClick={() => handleTabClick("operations")}
             />
@@ -95,23 +92,16 @@ export default function Header() {
               onClick={() => handleTabClick("tasks")}
             />
             <ModeTab
-              label="Live Stage"
+              label="Stage Control"
               active={location.pathname === "/" && mode === "live"}
               onClick={() => handleTabClick("live")}
             />
+            <ModeTab
+              label="Volunteer Management"
+              active={location.pathname === "/" && mode === "volunteers"}
+              onClick={() => handleTabClick("volunteers")}
+            />
           </nav>
-
-          {/* ─── GO LIVE button ─── */}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleGoLive}
-            className="hidden md:inline-flex ml-2 !h-9 !text-xs"
-            aria-label="Switch to Live Stage mode and start first upcoming session"
-          >
-            <Radio size={14} strokeWidth={3} />
-            GO LIVE
-          </Button>
 
           {/* ─── Spacer ─── */}
           <div className="flex-1" />
@@ -133,18 +123,27 @@ export default function Header() {
             />
           </div>
 
-          {/* ─── Add New ─── */}
+          {/* ─── Add New / Actions Menu (Item 14) ─── */}
           <Dropdown
             align="right"
             ariaLabel="Add new item"
             trigger={
-              <span className="inline-flex items-center justify-center w-9 h-9 bg-neo-secondary border-2 border-neo-ink shadow-[2px_2px_0_#000] text-neo-ink hover:shadow-neo-sm transition-all duration-100 ease-linear active:translate-x-[1px] active:translate-y-[1px] active:shadow-none">
+              <span className="inline-flex items-center justify-center w-9 h-9 bg-neo-secondary border-2 border-neo-ink shadow-[2px_2px_0_#000] text-neo-ink hover:shadow-neo-sm transition-all duration-100 ease-linear active:translate-x-[1px] active:translate-y-[1px] active:shadow-none cursor-pointer" title="Create or Manage">
                 <Plus size={18} strokeWidth={3} />
               </span>
             }
             items={[
-              { label: "New Task", icon: ListTodo, onClick: () => setTaskModalOpen(true) },
-              { label: "New Session", icon: CalendarPlus, onClick: () => setStageModalOpen(true) },
+              { label: "New Task (Select Board)", icon: ListTodo, onClick: () => setTaskModalOpen(true) },
+              { label: "New Stage Session", icon: CalendarPlus, onClick: () => setStageModalOpen(true) },
+              {
+                label: "Create Event Board",
+                icon: Layers,
+                onClick: () => {
+                  handleTabClick("tasks");
+                },
+              },
+              { label: "Email All Volunteers", icon: Mail, onClick: () => setVolunteerModalOpen(true) },
+              { label: "Generate Event Poster", icon: Palette, onClick: () => setPosterModalOpen(true) },
             ]}
           />
 
@@ -164,19 +163,44 @@ export default function Header() {
             }
           >
             {(close) => (
-              <div className="w-72 max-h-80 overflow-y-auto">
-                <div className="flex items-center justify-between px-4 py-2 border-b-2 border-neo-ink bg-neo-bg">
+              <div className="w-84 max-h-80 overflow-y-auto">
+                <div className="flex items-center justify-between px-4 py-2 border-b-2 border-neo-ink bg-neo-bg sticky top-0 z-10">
                   <span className="font-black text-xs uppercase tracking-wider">
                     Notifications
                   </span>
-                  <button
-                    onClick={() => {
-                      markAllRead();
-                    }}
-                    className="text-xs font-bold uppercase text-neo-accent hover:underline cursor-pointer bg-transparent border-0"
-                  >
-                    Mark all read
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {notifications.length > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            markAllRead();
+                          }}
+                          className="text-xs font-bold uppercase text-neo-ink/70 hover:text-neo-ink hover:underline cursor-pointer bg-transparent border-0"
+                        >
+                          Mark read
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            clearAll();
+                          }}
+                          className="text-xs font-bold uppercase text-neo-accent hover:underline cursor-pointer bg-transparent border-0"
+                        >
+                          Clear all
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={close}
+                      aria-label="Close notifications"
+                      className="p-1 hover:bg-neo-accent border border-neo-ink bg-neo-white text-neo-ink font-bold cursor-pointer transition-colors ml-1"
+                      title="Close"
+                    >
+                      <X size={12} strokeWidth={3} />
+                    </button>
+                  </div>
                 </div>
                 {notifications.length === 0 ? (
                   <p className="px-4 py-6 text-center font-bold text-sm text-neo-ink/50">
@@ -187,7 +211,7 @@ export default function Header() {
                     <div
                       key={n.id}
                       className={[
-                        "px-4 py-3 border-b border-neo-ink/10 flex gap-3 items-start",
+                        "group px-4 py-3 border-b border-neo-ink/10 flex gap-3 items-start relative hover:bg-neo-bg/40 transition-colors",
                         n.read ? "opacity-60" : "",
                       ].join(" ")}
                     >
@@ -195,10 +219,10 @@ export default function Header() {
                         className={[
                           "shrink-0 w-7 h-7 inline-flex items-center justify-center border-2 border-neo-ink mt-0.5",
                           n.type === "ai"
-                            ? "bg-neo-muted"
+                            ? "bg-neo-muted text-neo-ink"
                             : n.type === "warning"
-                            ? "bg-neo-accent"
-                            : "bg-neo-secondary",
+                            ? "bg-neo-accent text-neo-white"
+                            : "bg-neo-secondary text-neo-ink",
                         ].join(" ")}
                       >
                         {n.type === "ai" ? (
@@ -209,17 +233,27 @@ export default function Header() {
                           <Sparkles size={14} strokeWidth={3} />
                         )}
                       </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm text-neo-ink leading-snug">
+                      <div className="flex-1 min-w-0 pr-4">
+                        <p className="font-bold text-xs text-neo-ink leading-snug">
                           {n.message}
                         </p>
-                        <p className="text-xs font-bold text-neo-ink/40 mt-1">
+                        <p className="text-[10px] font-bold text-neo-ink/40 mt-1">
                           {formatRelative(n.timestamp)}
                         </p>
                       </div>
-                      {!n.read && (
-                        <span className="w-2 h-2 rounded-full bg-neo-accent border border-neo-ink shrink-0 mt-2" />
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {!n.read && (
+                          <span className="w-2 h-2 rounded-full bg-neo-accent border border-neo-ink mt-1" />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeNotification(n.id)}
+                          className="opacity-0 group-hover:opacity-100 hover:text-neo-accent p-0.5 text-neo-ink/50 transition-opacity"
+                          title="Dismiss notification"
+                        >
+                          <X size={12} strokeWidth={2.5} />
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -249,14 +283,17 @@ export default function Header() {
             }
             items={[
               {
-                label: user?.displayName ? `${user.displayName.slice(0, 16)}` : "Profile",
+                label: user?.displayName ? user.displayName.slice(0, 20) : (user?.email || "Profile"),
                 icon: User,
                 onClick: () => {},
               },
               {
                 label: "Sign Out",
                 icon: LogOut,
-                onClick: () => signOutUser(),
+                onClick: async () => {
+                  await signOutUser();
+                  navigate("/login");
+                },
               },
             ]}
           />
@@ -265,12 +302,12 @@ export default function Header() {
         {/* ─── Mobile mode tabs ─── */}
         <div className="md:hidden flex border-t-2 border-neo-ink/20">
           <MobileHeaderTab
-            label="Operations"
+            label="Live Flow"
             active={location.pathname === "/" && mode === "operations"}
             onClick={() => handleTabClick("operations")}
           />
           <MobileHeaderTab
-            label="Event Directory"
+            label="Directory"
             active={
               (location.pathname === "/" && mode === "tasks") ||
               location.pathname.startsWith("/taskboards/")
@@ -278,18 +315,15 @@ export default function Header() {
             onClick={() => handleTabClick("tasks")}
           />
           <MobileHeaderTab
-            label="Live Stage"
+            label="Stage"
             active={location.pathname === "/" && mode === "live"}
             onClick={() => handleTabClick("live")}
           />
-          <button
-            onClick={handleGoLive}
-            className="flex-1 h-10 bg-neo-accent text-neo-ink font-bold text-xs uppercase tracking-wider border-0 cursor-pointer flex items-center justify-center gap-1"
-            aria-label="Switch to Live Stage mode and start first upcoming session"
-          >
-            <Radio size={12} strokeWidth={3} />
-            GO LIVE
-          </button>
+          <MobileHeaderTab
+            label="Volunteers"
+            active={location.pathname === "/" && mode === "volunteers"}
+            onClick={() => handleTabClick("volunteers")}
+          />
         </div>
 
         {/* ─── Mobile search (always visible on small) ─── */}
@@ -324,6 +358,19 @@ export default function Header() {
         open={stageModalOpen}
         onClose={() => setStageModalOpen(false)}
       />
+
+      {/* Volunteer Email Modal */}
+      <VolunteerEmailModal
+        open={volunteerModalOpen}
+        onClose={() => setVolunteerModalOpen(false)}
+      />
+
+      {/* Event Poster Studio Modal */}
+      <EventPosterModal
+        open={posterModalOpen}
+        onClose={() => setPosterModalOpen(false)}
+        event={null}
+      />
     </>
   );
 }
@@ -337,10 +384,10 @@ function ModeTab({ label, active, onClick }) {
       aria-selected={active}
       onClick={onClick}
       className={[
-        "px-4 py-1.5 font-bold text-xs uppercase tracking-wider cursor-pointer",
+        "px-3.5 py-1.5 font-semibold text-xs tracking-normal cursor-pointer",
         "border-2 transition-all duration-100 ease-linear",
         active
-          ? "bg-neo-white text-neo-ink border-neo-ink shadow-[2px_2px_0_#000]"
+          ? "bg-neo-white text-neo-ink border-neo-ink shadow-[2px_2px_0_#0F172A]"
           : "bg-transparent text-neo-white/70 border-transparent hover:text-neo-white",
       ].join(" ")}
     >
@@ -356,7 +403,7 @@ function MobileHeaderTab({ label, active, onClick }) {
       aria-selected={active}
       onClick={onClick}
       className={[
-        "flex-1 h-10 font-bold text-xs uppercase tracking-wider cursor-pointer border-0",
+        "flex-1 h-10 font-semibold text-xs tracking-normal cursor-pointer border-0",
         "transition-all duration-100 ease-linear",
         active
           ? "bg-neo-white text-neo-ink"

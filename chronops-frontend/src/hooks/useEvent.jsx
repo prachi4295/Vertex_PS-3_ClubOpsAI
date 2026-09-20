@@ -6,6 +6,7 @@ import {
   SEED_EVENT,
   LOCAL_EVENT_KEY,
 } from "../data/seed";
+import { getStoredEvent, saveStoredEvent } from "../lib/storage";
 
 /**
  * Hook to listen to an event document in real time via onSnapshot.
@@ -18,9 +19,9 @@ export function useEvent(eventId = DEMO_EVENT_ID) {
 
   const loadLocalEvent = useCallback(() => {
     try {
-      const stored = localStorage.getItem(`clubops_event_${eventId}`);
+      const stored = getStoredEvent(eventId);
       if (stored) {
-        setEvent(JSON.parse(stored));
+        setEvent(stored);
       } else {
         setEvent({
           ...SEED_EVENT,
@@ -96,10 +97,9 @@ export function useEvent(eventId = DEMO_EVENT_ID) {
       } else {
         setEvent((prev) => {
           const next = { ...prev, ...updates };
-          localStorage.setItem(`clubops_event_${eventId}`, JSON.stringify(next));
+          saveStoredEvent(eventId, next);
           return next;
         });
-        window.dispatchEvent(new CustomEvent("clubops-data-updated"));
       }
     },
     [eventId]

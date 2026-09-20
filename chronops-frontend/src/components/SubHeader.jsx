@@ -11,7 +11,7 @@ export default function SubHeader() {
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [editStageOpen, setEditStageOpen] = useState(false);
 
-  const title = mode === "tasks" ? "Event Directory" : "Event Operations";
+  const title = mode === "tasks" ? "Event Directory" : "Live Event Operations";
 
   return (
     <>

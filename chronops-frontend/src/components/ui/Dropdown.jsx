@@ -36,6 +36,16 @@ export default function Dropdown({
     return () => document.removeEventListener("keydown", handleKey);
   }, [open]);
 
+  // Close on page scroll so open menus don't linger or overlap scrolling content
+  useEffect(() => {
+    if (!open) return;
+    function handleScroll() {
+      setOpen(false);
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [open]);
+
   return (
     <div ref={ref} className={["relative inline-block", className].join(" ")}>
       <button
@@ -60,14 +70,22 @@ export default function Dropdown({
       </button>
 
       {open && (
-        <div
-          role="menu"
-          className={[
-            "absolute top-full mt-2 z-50 min-w-[200px]",
-            "bg-neo-white border-4 border-neo-ink shadow-neo-md",
-            align === "right" ? "right-0" : "left-0",
-          ].join(" ")}
-        >
+        <>
+          {/* Transparent Backdrop to capture outside clicks and touch */}
+          <div
+            className="fixed inset-0 z-40 bg-transparent"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+
+          <div
+            role="menu"
+            className={[
+              "absolute top-full mt-2 z-50 min-w-[200px]",
+              "bg-neo-white border-4 border-neo-ink shadow-neo-md",
+              align === "right" ? "right-0" : "left-0",
+            ].join(" ")}
+          >
           {children
             ? children(() => setOpen(false))
             : items.map((item, i) => (
@@ -96,6 +114,7 @@ export default function Dropdown({
                 </button>
               ))}
         </div>
+        </>
       )}
     </div>
   );

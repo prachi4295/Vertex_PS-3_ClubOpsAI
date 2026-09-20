@@ -81,3 +81,102 @@ export function formatTimeRange(startTime, durationMinutes) {
   const endTime = addMinutesToTime(startTime, durationMinutes);
   return `${startTime} - ${endTime}`;
 }
+
+/**
+ * Detects overlapping or clashing sessions in a schedule.
+ * Returns an array of clash objects detailing which sessions overlap and by how many minutes.
+ *
+ * @param {Array} sessions
+ * @returns {Array<{ currentId: string, currentTitle: string, nextId: string, nextTitle: string, overlapMinutes: number, currentEnd: string, nextStart: string }>}
+ */
+export function detectTimingClashes(sessions = []) {
+  if (!Array.isArray(sessions) || sessions.length < 2) return [];
+
+  // Sort sessions sequentially by order or start time
+  const sorted = [...sessions].sort((a, b) => {
+    if (a.order !== undefined && b.order !== undefined && a.order !== b.order) {
+      return a.order - b.order;
+    }
+    return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
+  });
+
+  const clashes = [];
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const current = sorted[i];
+    const next = sorted[i + 1];
+
+    if (!current.startTime || !next.startTime) continue;
+
+    const currentStart = timeToMinutes(current.startTime);
+    const duration = Number(current.durationMinutes) || 30;
+    const currentEnd = currentStart + duration;
+    const nextStart = timeToMinutes(next.startTime);
+
+    if (currentEnd > nextStart) {
+      const overlapMinutes = currentEnd - nextStart;
+      clashes.push({
+        currentId: current.id,
+        currentTitle: current.title,
+        nextId: next.id,
+        nextTitle: next.title,
+        overlapMinutes,
+        currentEnd: minutesToTime(currentEnd),
+        currentEndTime: minutesToTime(currentEnd),
+        nextStart: next.startTime,
+        nextStartTime: next.startTime,
+      });
+    }
+  }
+
+  return clashes;
+}
+
+/**
+ * Automatically resolves all timing clashes by shifting subsequent sessions forward
+ * so each session starts right after the previous session ends.
+ *
+ * @param {Array} sessions
+ * @returns {Array} resolved sessions
+ */
+export function resolveTimingClashes(sessions = []) {
+  if (!Array.isArray(sessions) || sessions.length === 0) return [];
+
+  const sorted = [...sessions].sort((a, b) => {
+    if (a.order !== undefined && b.order !== undefined && a.order !== b.order) {
+      return a.order - b.order;
+    }
+    return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
+  });
+
+  let cursor = 0;
+  return sorted.map((s, idx) => {
+    const startMins = timeToMinutes(s.startTime);
+    const duration = Number(s.durationMinutes) || 30;
+
+    if (idx === 0) {
+      cursor = startMins + duration;
+      return { ...s };
+    }
+
+    if (s.status === "completed") {
+      cursor = Math.max(cursor, startMins + duration);
+      return { ...s };
+    }
+
+    // If current start is before cursor (overlap clash), shift it forward to cursor
+    if (startMins < cursor) {
+      const newStart = minutesToTime(cursor);
+      cursor = cursor + duration;
+      return {
+        ...s,
+        startTime: newStart,
+      };
+    } else {
+      cursor = Math.max(cursor, startMins + duration);
+      return { ...s };
+    }
+  });
+}
+
+

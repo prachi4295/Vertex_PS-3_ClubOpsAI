@@ -7,19 +7,21 @@ import Button from "./Button";
  */
 export default function Modal({
   open,
+  isOpen,
   onClose,
   title,
   children,
   className = "",
 }) {
   const dialogRef = useRef(null);
+  const isModalOpen = Boolean(open ?? isOpen);
 
   useEffect(() => {
     const el = dialogRef.current;
     if (!el) return;
-    if (open && !el.open) el.showModal();
-    else if (!open && el.open) el.close();
-  }, [open]);
+    if (isModalOpen && !el.open) el.showModal();
+    else if (!isModalOpen && el.open) el.close();
+  }, [isModalOpen]);
 
   return (
     <dialog

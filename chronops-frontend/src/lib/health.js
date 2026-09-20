@@ -1,4 +1,4 @@
-import { timeToMinutes, calculateDelayMinutes } from "./time";
+import { timeToMinutes, calculateDelayMinutes, detectTimingClashes } from "./time";
 
 /**
  * Named constants for Risk Score thresholds and calculations.
@@ -18,6 +18,7 @@ export const RISK_POINTS = {
   UNASSIGNED_TASK: 1,
   DELAY_HIGH: 2,
   DELAY_LOW: 1,
+  TIMING_CLASH: 3,
 };
 
 /**
@@ -139,12 +140,16 @@ export function calculateRiskScore(tasks = [], sessions = [], now = new Date()) 
     delayPoints = RISK_POINTS.DELAY_LOW;
   }
 
-  const score = overduePoints + unassignedPoints + delayPoints;
+  // Schedule timing clash points
+  const clashes = detectTimingClashes(sessions);
+  const clashPoints = clashes.length * (RISK_POINTS.TIMING_CLASH || 3);
+
+  const score = overduePoints + unassignedPoints + delayPoints + clashPoints;
 
   let level = "Low";
-  if (score >= 6) {
+  if (score >= 6 || clashes.length >= 2) {
     level = "High";
-  } else if (score >= 3) {
+  } else if (score >= 3 || clashes.length >= 1) {
     level = "Medium";
   }
 
@@ -158,6 +163,9 @@ export function calculateRiskScore(tasks = [], sessions = [], now = new Date()) 
       unassignedPoints,
       currentDelay,
       delayPoints,
+      clashes,
+      clashesCount: clashes.length,
+      clashPoints,
     },
   };
 }

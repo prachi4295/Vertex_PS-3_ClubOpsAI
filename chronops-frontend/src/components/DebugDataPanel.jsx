@@ -32,7 +32,7 @@ export default function DebugDataPanel() {
       await resetDemoData(user?.uid || "demo-lead-uid");
       addNotification({
         title: "Database Re-Seeded",
-        message: "HackGenesis 2026 re-seeded cleanly with 12 tasks & 10 sessions.",
+        message: "ChronOps Tech Summit 2026 re-seeded cleanly with 12 tasks & 10 sessions.",
         type: "success",
       });
     } catch (err) {
@@ -107,7 +107,7 @@ export default function DebugDataPanel() {
           <div className="p-3 bg-neo-bg border-3 border-neo-ink shadow-[2px_2px_0_#000]">
             <div className="text-[10px] font-black text-neo-ink/60 uppercase">Active Event</div>
             <div className="font-black text-sm text-neo-ink truncate mt-0.5">
-              {event?.name || "HackGenesis 2026"}
+              {event?.name || "ChronOps Tech Summit 2026"}
             </div>
             <div className="text-[10px] font-bold text-neo-ink/50 mt-1 uppercase">
               Owner: {user?.displayName || "Demo Lead"}

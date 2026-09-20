@@ -19,6 +19,7 @@ import {
   ChevronDown,
   ArrowRight,
   Sparkles,
+  Mail,
 } from "lucide-react";
 import { Card, Badge, Input } from "./ui";
 import Button from "./ui/Button";
@@ -35,17 +36,14 @@ import {
 import { resetDemoData } from "../data/seed";
 import { INITIAL_EVENTS } from "../data/multiEvents";
 import ConfigureSessionsModal from "./ConfigureSessionsModal";
+import VolunteerEmailModal from "./VolunteerEmailModal";
 
-const LOCAL_EVENTS_STORAGE_KEY = "clubops_all_events_list";
+import { getStoredEvents, getStoredDispatches, saveStoredDispatches } from "../lib/storage";
+
+const DEMO_EVENT_IDS = ["chronops-summit-2026", "ai-summit-2026", "club-orientation-2026"];
 
 function loadSavedEvents() {
-  try {
-    const raw = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    console.warn("Failed to load events in LiveStageView:", e);
-  }
-  return INITIAL_EVENTS;
+  return getStoredEvents();
 }
 
 /**
@@ -65,22 +63,29 @@ function loadSavedEvents() {
 export default function LiveStageView({ initialEventId }) {
   const [events, setEvents] = useState(loadSavedEvents);
   const [selectedEventId, setSelectedEventId] = useState(
-    initialEventId || (events[0] && events[0].id) || "hackgenesis-2026"
+    initialEventId || (events[0] && events[0].id) || ""
   );
   const [configureModalOpen, setConfigureModalOpen] = useState(false);
+  const [volunteerEmailOpen, setVolunteerEmailOpen] = useState(false);
+  const [autoTimeSync, setAutoTimeSync] = useState(true);
 
   useEffect(() => {
     const handleEventsUpdate = () => {
-      setEvents(loadSavedEvents());
+      const refreshed = loadSavedEvents();
+      setEvents(refreshed);
+      if (refreshed.length > 0 && !refreshed.some((e) => e.id === selectedEventId)) {
+        setSelectedEventId(refreshed[0].id);
+      }
     };
     window.addEventListener("clubops-data-updated", handleEventsUpdate);
     return () =>
       window.removeEventListener("clubops-data-updated", handleEventsUpdate);
-  }, []);
+  }, [selectedEventId]);
 
   const activeEvent =
     events.find((e) => e.id === selectedEventId) ||
-    events[0] || { id: "hackgenesis-2026", name: "HackGenesis 2026" };
+    events[0] ||
+    null;
 
   const {
     sessions,
@@ -88,7 +93,7 @@ export default function LiveStageView({ initialEventId }) {
     completeSession,
     updateSession,
     updateSessionsBatch,
-  } = useSessions(activeEvent.id);
+  } = useSessions(activeEvent?.id || null);
   const { addNotification } = useNotifications();
   const {
     currentTime,
@@ -103,6 +108,7 @@ export default function LiveStageView({ initialEventId }) {
   const [demoDrawerOpen, setDemoDrawerOpen] = useState(false);
   const [fillerModalOpen, setFillerModalOpen] = useState(false);
   const [fillerText, setFillerText] = useState("");
+  const [fillerDuration, setFillerDuration] = useState(1);
   const [loadingFiller, setLoadingFiller] = useState(false);
 
   // Script generation and audio
@@ -126,6 +132,91 @@ export default function LiveStageView({ initialEventId }) {
   const nextSession = upcomingSessions[0] || null;
   const completedSessions = sortedSessions.filter((s) => s.status === "completed");
   const prevSession = completedSessions[completedSessions.length - 1] || null;
+
+  // ─── Forward Emails to Speakers, Volunteers, Participants ───
+  const forwardStakeholderEmails = (session) => {
+    const speakerEmail = session.speaker
+      ? `${session.speaker.toLowerCase().replace(/[^a-z0-9]/g, "")}@speaker.chronops.io`
+      : "speaker@chronops.io";
+    const dispatches = [
+      {
+        to: `Speaker: ${session.speaker || "Presenter"} (${speakerEmail})`,
+        subject: `STAGE NOTICE: Your session "${session.title}" is now LIVE`,
+        body: `Hello ${session.speaker || "Speaker"}, your session "${session.title}" is now officially live on the ChronOps stage. Your planned time is ${session.durationMinutes} minutes. Best of luck!`,
+      },
+      {
+        to: "All Volunteers (volunteers@chronops.io)",
+        subject: `LIVE ALERT: "${session.title}" has started`,
+        body: `Stage crew & AV: "${session.title}" is now live. Ensure timer displays are visible and speaker mics are balanced.`,
+      },
+      {
+        to: "Participants (attendees@chronops.io)",
+        subject: `HAPPENING NOW: "${session.title}" on Main Stage`,
+        body: `Join now: "${session.title}" is starting on the main stage right now!`,
+      },
+    ];
+
+    try {
+      const saved = getStoredDispatches();
+      dispatches.forEach((d) =>
+        saved.unshift({
+          ...d,
+          id: "auto-" + Date.now() + Math.random(),
+          timestamp: new Date().toISOString(),
+        })
+      );
+      saveStoredDispatches(saved);
+    } catch (e) {}
+
+    addNotification({
+      message: `Forwarded stage emails to speaker (${session.speaker || "Presenter"}), 24 volunteers, and participants.`,
+      type: "action",
+    });
+  };
+
+  const handleStartSession = async (sessionId, time) => {
+    const sess = sessions.find((s) => s.id === sessionId);
+    await startSession(sessionId, time);
+    if (sess) {
+      forwardStakeholderEmails(sess);
+    }
+  };
+
+  // ─── Time-Sync: Auto-advance live stage based on event time ───
+  useEffect(() => {
+    if (!autoTimeSync || !currentTime || sessions.length === 0) return;
+
+    const currentHours = currentTime.getHours().toString().padStart(2, "0");
+    const currentMins = currentTime.getMinutes().toString().padStart(2, "0");
+    const currentHHMM = `${currentHours}:${currentMins}`;
+
+    // If no session is currently live and the first upcoming session's time has arrived:
+    if (!liveSession && nextSession && nextSession.startTime) {
+      if (currentHHMM >= nextSession.startTime) {
+        handleStartSession(nextSession.id, currentTime);
+      }
+    }
+  }, [currentTime, autoTimeSync, liveSession, nextSession, sessions]);
+
+  // ─── Auto-Show Scripts: Automatically generate/display script when session is live ───
+  useEffect(() => {
+    if (liveSession && !liveSession.script && !generatingScript) {
+      const autoGenerate = async () => {
+        setGeneratingScript(true);
+        try {
+          const script = await generateSpeakerIntro(liveSession);
+          if (script) {
+            await updateSession(liveSession.id, { script });
+          }
+        } catch (e) {
+          console.warn("Auto script generation error:", e);
+        } finally {
+          setGeneratingScript(false);
+        }
+      };
+      autoGenerate();
+    }
+  }, [liveSession?.id, liveSession?.script]);
 
   // Cleanup speech synthesis on unmount
   useEffect(() => {
@@ -224,23 +315,32 @@ export default function LiveStageView({ initialEventId }) {
     }
   };
 
-  // ─── Filler Script Generation ───
+  // ─── Filler Script Generation with User-Specified Duration ───
+  const generateFillerForTime = async (mins) => {
+    setLoadingFiller(true);
+    try {
+      const text = await generateFillerScript(
+        liveSession,
+        nextSession,
+        activeEvent?.name || "Live Event",
+        mins
+      );
+      setFillerText(text);
+      addNotification({
+        message: `AI generated ${mins}-min filler script for stage anchor.`,
+        type: "ai",
+      });
+    } catch (err) {
+      console.error("Failed to generate filler:", err);
+    } finally {
+      setLoadingFiller(false);
+    }
+  };
+
   const handleOpenFiller = async () => {
     setFillerModalOpen(true);
     if (!fillerText) {
-      setLoadingFiller(true);
-      try {
-        const text = await generateFillerScript(liveSession, nextSession, "HackGenesis 2026");
-        setFillerText(text);
-        addNotification({
-          message: "AI generated 60s emergency filler script.",
-          type: "ai",
-        });
-      } catch (err) {
-        console.error("Failed to generate filler:", err);
-      } finally {
-        setLoadingFiller(false);
-      }
+      await generateFillerForTime(fillerDuration);
     }
   };
 
@@ -292,12 +392,12 @@ export default function LiveStageView({ initialEventId }) {
   };
 
   return (
-    <div className="min-h-screen bg-neo-bg text-neo-ink pb-28 pt-3 px-3 sm:px-6 max-w-4xl mx-auto flex flex-col justify-between">
+    <div className="min-h-screen bg-neo-bg text-neo-ink pb-10 pt-3 px-3 sm:px-6 max-w-4xl mx-auto flex flex-col justify-between">
       {/* ─── Top Stage Header Bar ─── */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b-4 border-neo-ink pb-3 mb-4">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="w-3.5 h-3.5 rounded-full bg-neo-accent border-2 border-neo-ink animate-ping inline-block shrink-0" />
-          <span className="font-black text-xs uppercase tracking-widest bg-neo-ink text-neo-white px-2.5 py-1 shadow-[2px_2px_0_#FFD93D]">
+          <span className="font-black text-xs uppercase tracking-widest bg-neo-ink text-neo-white px-2.5 py-1 shadow-[2px_2px_0_#FDE68A]">
             LIVE STAGE MONITOR
           </span>
 
@@ -327,6 +427,20 @@ export default function LiveStageView({ initialEventId }) {
             <Sparkles size={13} strokeWidth={3} />
             <span className="hidden sm:inline">Configure with AI</span>
             <span className="sm:hidden">AI Config</span>
+          </button>
+
+          {/* Auto-Sync Time Toggle */}
+          <button
+            type="button"
+            onClick={() => setAutoTimeSync((prev) => !prev)}
+            className={[
+              "min-h-[30px] px-2 border-2 border-neo-ink font-black text-[10px] uppercase flex items-center gap-1 shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer",
+              autoTimeSync ? "bg-neo-white text-green-700" : "bg-neo-white/60 text-neo-ink/50",
+            ].join(" ")}
+            title="Auto-sync live stage transitions with event schedule time"
+          >
+            <Clock size={12} strokeWidth={3} />
+            <span>Time-Sync: {autoTimeSync ? "ON" : "OFF"}</span>
           </button>
         </div>
 
@@ -479,6 +593,64 @@ export default function LiveStageView({ initialEventId }) {
                 Facts from bio: {liveSession.bio}
               </p>
             )}
+
+            {/* Delay Buttons (+5m, +10m, +15m), Filler Script & Complete & Next in Current Session Box */}
+            <div className="mt-4 pt-3 border-t-2 border-neo-ink/20 flex flex-wrap items-center gap-2 sm:gap-3">
+              {/* Delay Buttons (+5m, +10m, +15m) */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={!liveSession || isReflowing}
+                  onClick={() => handleApplyDelay(5)}
+                  className="px-3 py-2 bg-neo-white border-2 border-neo-ink text-neo-ink font-black text-xs sm:text-sm shadow-[2px_2px_0_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer disabled:opacity-40"
+                  title="Add +5 minutes delay with schedule reflow"
+                >
+                  +5m
+                </button>
+                <button
+                  type="button"
+                  disabled={!liveSession || isReflowing}
+                  onClick={() => handleApplyDelay(10)}
+                  className="px-3 py-2 bg-neo-white border-2 border-neo-ink text-neo-ink font-black text-xs sm:text-sm shadow-[2px_2px_0_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer disabled:opacity-40"
+                  title="Add +10 minutes delay with schedule reflow"
+                >
+                  +10m
+                </button>
+                <button
+                  type="button"
+                  disabled={!liveSession || isReflowing}
+                  onClick={() => handleApplyDelay(15)}
+                  className="px-3 py-2 bg-neo-white border-2 border-neo-ink text-neo-ink font-black text-xs sm:text-sm shadow-[2px_2px_0_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer disabled:opacity-40"
+                  title="Add +15 minutes delay with schedule reflow"
+                >
+                  +15m
+                </button>
+              </div>
+
+              {/* Emergency Filler Script */}
+              <button
+                type="button"
+                onClick={handleOpenFiller}
+                className="px-3.5 py-2 bg-neo-secondary border-2 border-neo-ink text-neo-ink font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-[2px_2px_0_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer"
+                title="Open 1-minute emergency filler script"
+              >
+                <FileText size={14} strokeWidth={3} />
+                <span>Filler Script</span>
+              </button>
+
+              {/* Complete & Next Button (at the end, beside Filler Script) */}
+              <button
+                type="button"
+                disabled={!liveSession}
+                onClick={() => completeSession(liveSession.id, currentTime)}
+                className="px-4 py-2 bg-neo-accent border-2 border-neo-ink text-neo-ink font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2 shadow-[2px_2px_0_#000] hover:shadow-neo hover:translate-x-[-1px] hover:translate-y-[-1px] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all cursor-pointer disabled:opacity-40"
+                title="Mark this session completed and advance to the next session"
+              >
+                <CheckSquare size={16} strokeWidth={3} />
+                <span>Complete & Next</span>
+                <ArrowRight size={16} strokeWidth={3} />
+              </button>
+            </div>
           </div>
 
           {/* 3. Session Script Display (Cached or Generated on Demand) */}
@@ -625,7 +797,7 @@ export default function LiveStageView({ initialEventId }) {
               <Button
                 variant="primary"
                 size="lg"
-                onClick={() => startSession(nextSession.id, currentTime)}
+                onClick={() => handleStartSession(nextSession.id, currentTime)}
                 className="!min-h-[48px] !text-sm !px-6"
               >
                 <Play size={16} strokeWidth={3} />
@@ -646,55 +818,6 @@ export default function LiveStageView({ initialEventId }) {
         </div>
       )}
 
-      {/* ─── Bottom Sticky Action Bar (One-Handed 375px Reachable) ─── */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-neo-ink border-t-4 border-neo-ink p-2 sm:p-3 shadow-2xl">
-        <div className="max-w-4xl mx-auto flex items-center gap-2">
-          {/* +5m and +10m quick delay buttons */}
-          <button
-            type="button"
-            disabled={!liveSession || isReflowing}
-            onClick={() => handleApplyDelay(5)}
-            className="min-h-[44px] px-3 bg-neo-white border-2 border-neo-white text-neo-ink font-black text-xs sm:text-sm shadow-[2px_2px_0_#FF6B6B] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer disabled:opacity-30 shrink-0"
-            title="Add +5 minutes delay with schedule reflow"
-          >
-            +5m
-          </button>
-          <button
-            type="button"
-            disabled={!liveSession || isReflowing}
-            onClick={() => handleApplyDelay(10)}
-            className="min-h-[44px] px-3 bg-neo-white border-2 border-neo-white text-neo-ink font-black text-xs sm:text-sm shadow-[2px_2px_0_#FF6B6B] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer disabled:opacity-30 shrink-0"
-            title="Add +10 minutes delay with schedule reflow"
-          >
-            +10m
-          </button>
-
-          {/* 60s Emergency Filler Script */}
-          <button
-            type="button"
-            onClick={handleOpenFiller}
-            className="min-h-[44px] px-3 bg-neo-secondary border-2 border-neo-secondary text-neo-ink font-black text-xs sm:text-sm flex items-center gap-1 shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer shrink-0"
-            title="Open 1-minute emergency filler script"
-          >
-            <FileText size={14} strokeWidth={3} />
-            <span className="hidden sm:inline">Filler Script</span>
-            <span className="sm:hidden">Filler</span>
-          </button>
-
-          {/* Complete and Next Session Button (Primary Action) */}
-          <button
-            type="button"
-            disabled={!liveSession}
-            onClick={() => completeSession(liveSession.id, currentTime)}
-            className="min-h-[44px] flex-1 bg-neo-accent border-2 border-neo-white text-neo-ink font-black text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-[2px_2px_0_#FFF] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer disabled:opacity-40"
-          >
-            <CheckSquare size={16} strokeWidth={3} />
-            <span className="truncate">Complete & Next</span>
-            <ArrowRight size={14} strokeWidth={3} className="hidden sm:inline" />
-          </button>
-        </div>
-      </div>
-
       {/* ─── Emergency Filler Script Modal / Drawer ─── */}
       {fillerModalOpen && (
         <div
@@ -704,9 +827,9 @@ export default function LiveStageView({ initialEventId }) {
         >
           <div className="bg-neo-white border-4 border-neo-ink p-4 sm:p-6 shadow-neo-lg max-w-lg w-full max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b-2 border-neo-ink pb-2 mb-3">
-              <span className="font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-2">
-                <FileText size={16} strokeWidth={3} className="text-neo-accent" />
-                60-Second Anchor Filler Script
+              <span className="font-bold text-xs sm:text-sm flex items-center gap-2 text-neo-ink">
+                <FileText size={16} strokeWidth={2.5} className="text-neo-accent" />
+                Anchor Filler Script ({fillerDuration} min{fillerDuration > 1 ? "s" : ""})
               </span>
               <button
                 type="button"
@@ -715,6 +838,54 @@ export default function LiveStageView({ initialEventId }) {
               >
                 <X size={20} strokeWidth={3} />
               </button>
+            </div>
+
+            {/* Time / Duration selector given by user */}
+            <div className="mb-3 p-2.5 bg-neo-bg/60 border-2 border-neo-ink flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-neo-ink">Duration:</span>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 5].map((mins) => (
+                    <button
+                      key={mins}
+                      type="button"
+                      onClick={() => {
+                        setFillerDuration(mins);
+                        generateFillerForTime(mins);
+                      }}
+                      className={[
+                        "px-2 py-0.5 text-xs font-bold border-2 border-neo-ink transition-all cursor-pointer",
+                        fillerDuration === mins
+                          ? "bg-neo-accent text-neo-ink shadow-[1px_1px_0_#000]"
+                          : "bg-neo-white text-neo-ink/80 hover:bg-neo-bg",
+                      ].join(" ")}
+                    >
+                      {mins}m
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-neo-ink/70 font-semibold">Custom mins:</span>
+                <input
+                  type="number"
+                  min="0.5"
+                  max="15"
+                  step="0.5"
+                  value={fillerDuration}
+                  onChange={(e) => setFillerDuration(parseFloat(e.target.value) || 1)}
+                  className="w-14 px-1.5 py-0.5 border-2 border-neo-ink bg-neo-white font-bold text-xs text-center"
+                />
+                <button
+                  type="button"
+                  onClick={() => generateFillerForTime(fillerDuration)}
+                  disabled={loadingFiller}
+                  className="px-2.5 py-1 bg-neo-accent border-2 border-neo-ink font-bold text-xs cursor-pointer hover:bg-neo-accent/90"
+                >
+                  Generate
+                </button>
+              </div>
             </div>
 
             {loadingFiller ? (
@@ -869,9 +1040,20 @@ export default function LiveStageView({ initialEventId }) {
 
       {/* ─── AI Session Configurator Modal ─── */}
       <ConfigureSessionsModal
-        isOpen={configureModalOpen}
+        open={configureModalOpen}
         onClose={() => setConfigureModalOpen(false)}
         initialEventId={selectedEventId}
+      />
+
+      {/* ─── Volunteer Email Dispatcher Modal ─── */}
+      <VolunteerEmailModal
+        open={volunteerEmailOpen}
+        onClose={() => setVolunteerEmailOpen(false)}
+        defaultContext={
+          liveSession
+            ? `Live stage update for session "${liveSession.title}" featuring ${liveSession.speaker || "Presenter"}.`
+            : "General volunteer operations notice."
+        }
       />
     </div>
   );

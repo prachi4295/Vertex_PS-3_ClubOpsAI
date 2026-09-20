@@ -18,6 +18,11 @@ import {
   LOCAL_SESSIONS_KEY,
 } from "../data/seed";
 import { AI_SUMMIT_SESSIONS, CLUB_ORIENTATION_SESSIONS } from "../data/multiEvents";
+import {
+  getStoredSessions,
+  saveStoredSessions,
+  getActiveUserEmail,
+} from "../lib/storage";
 
 const SessionsContext = createContext(null);
 
@@ -30,43 +35,11 @@ const withTimeout = (promise, ms = 1800) =>
   ]);
 
 function getLocalSessions(eventId) {
-  try {
-    const raw = localStorage.getItem(`clubops_sessions_${eventId}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return parsed.map((s) => ({
-        ...s,
-        actualStart: s.actualStart ? new Date(s.actualStart) : null,
-      }));
-    }
-  } catch (e) {
-    console.warn("Failed to load local sessions:", e);
-  }
-
-  if (eventId === "ai-summit-2026") {
-    return AI_SUMMIT_SESSIONS.map((s) => ({ ...s }));
-  }
-  if (eventId === "club-orientation-2026") {
-    return CLUB_ORIENTATION_SESSIONS.map((s) => ({ ...s }));
-  }
-
-  return SEED_SESSIONS.map((s, i) => ({
-    ...s,
-    id: s.id || `session-${i + 1}`,
-    actualStart: s.actualStart ? s.actualStart.toDate() : null,
-  }));
+  return getStoredSessions(eventId);
 }
 
 function saveLocalSessions(eventId, sessions) {
-  try {
-    const serialized = sessions.map((s) => ({
-      ...s,
-      actualStart: s.actualStart ? (s.actualStart instanceof Date ? s.actualStart.toISOString() : s.actualStart) : null,
-    }));
-    localStorage.setItem(`clubops_sessions_${eventId}`, JSON.stringify(serialized));
-  } catch (e) {
-    console.warn("Failed to save local sessions:", e);
-  }
+  saveStoredSessions(eventId, sessions);
 }
 
 /**
@@ -114,18 +87,28 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
         q,
         (snap) => {
           clearTimeout(timer);
-          const docs = snap.docs.map((d) => {
-            const data = d.data();
-            return {
-              id: d.id,
-              ...data,
-              actualStart: data.actualStart?.toDate?.() ?? (data.actualStart ? new Date(data.actualStart) : null),
-            };
-          });
+          const currentEmail = getActiveUserEmail();
+          const docs = snap.docs
+            .map((d) => {
+              const data = d.data();
+              return {
+                id: d.id,
+                ...data,
+                actualStart: data.actualStart?.toDate?.() ?? (data.actualStart ? new Date(data.actualStart) : null),
+              };
+            })
+            .filter((s) => !s.ownerEmail || s.ownerEmail === currentEmail);
 
           // Sort client-side by order, falling back to startTime
           docs.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.startTime || "").localeCompare(b.startTime || ""));
-          setSessions(docs);
+          
+          if (docs.length === 0) {
+            const fallbackData = getLocalSessions(eventId);
+            fallbackData.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.startTime || "").localeCompare(b.startTime || ""));
+            setSessions(fallbackData);
+          } else {
+            setSessions(docs);
+          }
           setLoading(false);
           setError(null);
         },
@@ -137,9 +120,15 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
         }
       );
 
+      const handleUpdate = () => {
+        reloadFromLocal();
+      };
+      window.addEventListener("clubops-data-updated", handleUpdate);
+
       return () => {
         clearTimeout(timer);
         unsub();
+        window.removeEventListener("clubops-data-updated", handleUpdate);
       };
     } else {
       reloadFromLocal();
@@ -155,8 +144,10 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
   // ─── Add session ───
   const addSession = useCallback(
     async (sessionData) => {
+      const ownerEmail = getActiveUserEmail();
       const newSession = {
         eventId,
+        ownerEmail,
         title: sessionData.title || "Untitled Session",
         speaker: sessionData.speaker || "",
         bio: sessionData.bio || "",
@@ -449,8 +440,10 @@ export function useEventSessions(eventId = DEMO_EVENT_ID) {
  * Standalone helper to write a batch of sessions directly to any specific eventId.
  */
 export async function setSessionsBatchForEvent(eventId, sessionsArray) {
+  const ownerEmail = getActiveUserEmail();
   const prepared = sessionsArray.map((s, idx) => ({
     eventId,
+    ownerEmail,
     title: s.title || "Session",
     speaker: s.speaker || "",
     bio: s.bio || "",

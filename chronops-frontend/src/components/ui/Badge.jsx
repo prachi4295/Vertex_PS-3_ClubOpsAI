@@ -19,8 +19,8 @@ export default function Badge({
   return (
     <span
       className={[
-        "inline-flex items-center px-3 py-1",
-        "font-bold text-xs uppercase tracking-wider",
+        "inline-flex items-center px-2.5 py-0.5",
+        "font-semibold text-xs",
         "border-4 border-neo-ink rounded-full",
         "shadow-neo-sm",
         rotate ? "rotate-[-2deg]" : "",

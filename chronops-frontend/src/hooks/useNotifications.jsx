@@ -8,46 +8,71 @@ let _nextId = 1;
  * Notifications context for logging AI actions and warnings.
  */
 export function NotificationsProvider({ children }) {
-  const [notifications, setNotifications] = useState([
-    {
-      id: _nextId++,
-      type: "ai",
-      message: "AI parsed 3 tasks from meeting notes",
-      timestamp: new Date(Date.now() - 120_000),
-      read: false,
-    },
-    {
-      id: _nextId++,
-      type: "warning",
-      message: "Session \"Keynote\" has no phonetic guide",
-      timestamp: new Date(Date.now() - 300_000),
-      read: false,
-    },
-    {
-      id: _nextId++,
-      type: "ai",
-      message: "Run-sheet reflowed: 2 sessions shifted",
-      timestamp: new Date(Date.now() - 600_000),
-      read: true,
-    },
-  ]);
+  const [notifications, setNotifications] = useState([]);
 
-  const addNotification = useCallback((type, message) => {
-    setNotifications((prev) => [
-      { id: _nextId++, type, message, timestamp: new Date(), read: false },
-      ...prev,
-    ]);
+  // Handles both addNotification({ message, type }) and addNotification(type, message)
+  const addNotification = useCallback((arg1, arg2) => {
+    let type = "info";
+    let message = "";
+
+    if (typeof arg1 === "object" && arg1 !== null) {
+      type = arg1.type || "info";
+      message = arg1.message || "";
+    } else {
+      type = arg1 || "info";
+      message = arg2 || "";
+    }
+
+    if (!message || typeof message !== "string" || !message.trim()) return;
+
+    const cleanMessage = message.trim();
+
+    setNotifications((prev) => {
+      // Prevent rapid duplicate notifications
+      const isDuplicate = prev.some(
+        (n) =>
+          n.message === cleanMessage &&
+          Date.now() - new Date(n.timestamp).getTime() < 5000
+      );
+      if (isDuplicate) return prev;
+
+      return [
+        {
+          id: _nextId++,
+          type,
+          message: cleanMessage,
+          timestamp: new Date(),
+          read: false,
+        },
+        ...prev.slice(0, 49), // cap to latest 50 notifications
+      ];
+    });
   }, []);
 
   const markAllRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   }, []);
 
+  const clearAll = useCallback(() => {
+    setNotifications([]);
+  }, []);
+
+  const removeNotification = useCallback((id) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <NotificationsContext.Provider
-      value={{ notifications, addNotification, markAllRead, unreadCount }}
+      value={{
+        notifications,
+        addNotification,
+        markAllRead,
+        clearAll,
+        removeNotification,
+        unreadCount,
+      }}
     >
       {children}
     </NotificationsContext.Provider>

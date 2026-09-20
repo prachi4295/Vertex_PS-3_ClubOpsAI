@@ -2,38 +2,13 @@
  * Multi-event definitions and initial task presets for the Event Taskboards Manager.
  */
 
-export const INITIAL_EVENTS = [
-  {
-    id: "hackgenesis-2026",
-    name: "HackGenesis 2026",
-    tagline: "36-Hour National Hackathon & AI Builders Stage",
-    category: "Flagship Hackathon",
-    date: "2026-09-19",
-    status: "active",
-    location: "Main Auditorium & Innovation Labs",
-    color: "accent",
-  },
-  {
-    id: "ai-summit-2026",
-    name: "AI & Web3 Summit 2026",
-    tagline: "Industry Keynotes, VC Pitches & Hands-on Workshops",
-    category: "Tech Conference",
-    date: "2026-10-15",
-    status: "planning",
-    location: "Science Complex & Hall B",
-    color: "secondary",
-  },
-  {
-    id: "club-orientation-2026",
-    name: "Club Orientation & Showcase",
-    tagline: "Campus Student Recruitment Drive & Project Expo",
-    category: "Campus Drive",
-    date: "2026-09-28",
-    status: "upcoming",
-    location: "Student Activity Center Plaza",
-    color: "muted",
-  },
+export const DEMO_EVENT_IDS = [
+  "chronops-summit-2026",
+  "ai-summit-2026",
+  "club-orientation-2026",
 ];
+
+export const INITIAL_EVENTS = [];
 
 export const AI_SUMMIT_TASKS = [
   {

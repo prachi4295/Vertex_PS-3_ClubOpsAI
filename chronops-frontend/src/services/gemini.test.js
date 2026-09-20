@@ -103,12 +103,12 @@ describe("Gemini Service & Task Extraction", () => {
       const script = await generateFillerScript(
         { title: "Keynote: Next-Gen Autonomous AI Agents" },
         { title: "Sponsor Tech Talk", speaker: "Vikram Malhotra" },
-        "HackGenesis 2026"
+        "ChronOps Tech Summit 2026"
       );
 
       expect(script).toBeDefined();
       expect(typeof script).toBe("string");
-      expect(script).toContain("HackGenesis 2026");
+      expect(script).toContain("ChronOps Tech Summit 2026");
       expect(script).toContain("Keynote: Next-Gen Autonomous AI Agents");
       expect(script).toContain("Sponsor Tech Talk");
 
@@ -171,12 +171,12 @@ describe("Gemini Service & Task Extraction", () => {
         const sessionWithBio = {
           speaker: "Dr. Ramesh Gupta",
           title: "Grand Finale",
-          bio: "Dean of Academic Affairs and HackGenesis Chief Patron",
+          bio: "Dean of Academic Affairs and ChronOps Chief Patron",
         };
 
         const intro = await generateSpeakerIntro(sessionWithBio);
         expect(intro).toContain("Dr. Ramesh Gupta");
-        expect(intro).toContain("Dean of Academic Affairs and HackGenesis Chief Patron");
+        expect(intro).toContain("Dean of Academic Affairs and ChronOps Chief Patron");
         // Must not contain hallucinated facts
         expect(intro).not.toContain("Nobel Prize");
         expect(intro).not.toContain("Fortune 500 CEO");

@@ -40,7 +40,7 @@ const Button = forwardRef(function Button(
       disabled={disabled}
       className={[
         "inline-flex items-center justify-center gap-2",
-        "font-bold uppercase tracking-wider",
+        "font-bold tracking-normal",
         "rounded-none cursor-pointer select-none",
         "transition-all duration-100 ease-linear",
         "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",

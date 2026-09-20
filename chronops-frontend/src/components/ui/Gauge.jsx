@@ -2,10 +2,10 @@ import { useState } from "react";
 import { HelpCircle } from "lucide-react";
 
 const COLOR_MAP = {
-  accent: "#FF6B6B",
-  secondary: "#FFD93D",
-  muted: "#C4B5FD",
-  ink: "#000000",
+  accent: "#E26D5C",
+  secondary: "#FDE68A",
+  muted: "#CBD5E1",
+  ink: "#0F172A",
 };
 
 /**
@@ -61,7 +61,7 @@ export default function Gauge({
             cy={(size - 8) / 2}
             r={radius}
             fill="none"
-            stroke="#FFFDF5"
+            stroke="#F8FAFC"
             strokeWidth={strokeWidth}
           />
           {/* Base track border outline */}

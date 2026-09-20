@@ -1,19 +1,19 @@
 @import "tailwindcss";
 
-/* ─── Neo-Brutalism Theme ─── */
+/* ─── Neo-Brutalism Theme (Refined & Balanced) ─── */
 @theme {
-  --color-neo-bg: #FFFDF5;
-  --color-neo-ink: #000000;
-  --color-neo-accent: #FF6B6B;
-  --color-neo-secondary: #FFD93D;
-  --color-neo-muted: #C4B5FD;
+  --color-neo-bg: #F8FAFC;
+  --color-neo-ink: #0F172A;
+  --color-neo-accent: #E26D5C;
+  --color-neo-secondary: #FDE68A;
+  --color-neo-muted: #E2E8F0;
   --color-neo-white: #FFFFFF;
 
-  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
-  --shadow-neo-sm: 4px 4px 0 #000;
-  --shadow-neo-md: 8px 8px 0 #000;
-  --shadow-neo-lg: 12px 12px 0 #000;
+  --shadow-neo-sm: 3px 3px 0 #0F172A;
+  --shadow-neo-md: 6px 6px 0 #0F172A;
+  --shadow-neo-lg: 10px 10px 0 #0F172A;
   --shadow-none: none;
 
   --animate-spin-slow: spin-slow 6s linear infinite;
@@ -32,37 +32,37 @@
 }
 
 html {
-  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
-  background-color: #FFFDF5;
-  color: #000000;
+  background-color: #F8FAFC;
+  color: #0F172A;
   min-height: 100vh;
 }
 
 /* ─── Texture Utilities ─── */
 .texture-halftone {
-  background-image: radial-gradient(circle, #000 0.7px, transparent 0.7px);
-  background-size: 12px 12px;
-  opacity: 0.04;
+  background-image: radial-gradient(circle, #0F172A 0.7px, transparent 0.7px);
+  background-size: 14px 14px;
+  opacity: 0.02;
   pointer-events: none;
 }
 
 .texture-grid {
   background-image:
-    linear-gradient(to right, #000 1px, transparent 1px),
-    linear-gradient(to bottom, #000 1px, transparent 1px);
-  background-size: 24px 24px;
-  opacity: 0.03;
+    linear-gradient(to right, #0F172A 1px, transparent 1px),
+    linear-gradient(to bottom, #0F172A 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.015;
   pointer-events: none;
 }
 
 .texture-noise {
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
   background-repeat: repeat;
   pointer-events: none;
 }
@@ -82,5 +82,5 @@ body {
 /* ─── Focus visible ring (neo-brutalist) ─── */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px #FFFDF5, 0 0 0 4px #000;
 }
+

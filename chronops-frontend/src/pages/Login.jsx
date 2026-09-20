@@ -6,17 +6,22 @@ import {
   ArrowRight,
   ShieldCheck,
   Radio,
-  Layers,
   Star,
   Terminal,
+  Users,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { Badge, Card } from "../components/ui";
+import { Badge, Input, Modal, Button } from "../components/ui";
 
 export default function Login() {
-  const { signInWithGoogle, signInDemo, loading, error } = useAuth();
+  const { signInWithGoogle, signInDemo, signInVolunteer, loading, error } = useAuth();
+  const [volunteerName, setVolunteerName] = useState("");
+  const [volunteerEmail, setVolunteerEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [googleModalOpen, setGoogleModalOpen] = useState(false);
+  const [googleName, setGoogleName] = useState("");
+  const [googleEmail, setGoogleEmail] = useState("");
   const navigate = useNavigate();
 
   const handleGoogleSignIn = async () => {
@@ -24,6 +29,32 @@ export default function Login() {
     setSubmitting(true);
     try {
       await signInWithGoogle();
+      navigate("/");
+    } catch (err) {
+      console.info("Native Firebase Google popup not configured or cancelled, opening Google account connector:", err);
+      setGoogleModalOpen(true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleGoogleModalSubmit = async (e) => {
+    e.preventDefault();
+    if (!googleEmail.trim()) {
+      setAuthError("Please enter your Google account email.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const email = googleEmail.trim();
+      const displayName = googleName.trim() || email.split("@")[0];
+      const photoURL = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=4285F4&color=fff&bold=true`;
+      await signInWithGoogle({
+        email,
+        displayName,
+        photoURL,
+      });
+      setGoogleModalOpen(false);
       navigate("/");
     } catch (err) {
       setAuthError(err.message || "Failed to sign in with Google.");
@@ -36,10 +67,24 @@ export default function Login() {
     setAuthError("");
     setSubmitting(true);
     try {
-      await signInDemo();
+      await signInDemo("admin");
       navigate("/");
     } catch (err) {
       setAuthError(err.message || "Failed to continue as demo.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleVolunteerSubmit = async (e) => {
+    e.preventDefault();
+    setAuthError("");
+    setSubmitting(true);
+    try {
+      await signInVolunteer(volunteerName || "Event Volunteer", volunteerEmail || "volunteer@chronops.io");
+      navigate("/");
+    } catch (err) {
+      setAuthError(err.message || "Failed to log in as volunteer.");
     } finally {
       setSubmitting(false);
     }
@@ -57,7 +102,7 @@ export default function Login() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 bg-neo-ink text-neo-white px-3 py-1 font-black tracking-wider text-sm border-2 border-neo-ink">
             <span className="w-2.5 h-2.5 bg-neo-accent rounded-full animate-pulse" />
-            ChronOpsAI
+            ChronOps
           </div>
           <Badge color="secondary" rotate className="hidden sm:inline-flex !text-[10px]">
             v2.4
@@ -74,7 +119,7 @@ export default function Login() {
         {/* Floating Decorative Badges */}
         <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
           <Badge color="accent" rotate className="!text-xs !px-3 !py-1">
-            ⚡ HACKGENESIS 2026
+            ⚡ CHRONOPS 2026
           </Badge>
           <Badge color="secondary" className="!text-xs !px-3 !py-1">
             LIVE STAGE & OPS
@@ -97,23 +142,26 @@ export default function Login() {
           </p>
         </div>
 
-        {/* ─── Neo-Brutalist Auth Box ─── */}
+        {/* ─── Unified Auth Box ─── */}
         <div className="w-full max-w-md">
           <div className="bg-neo-white border-4 border-neo-ink shadow-neo-lg p-6 sm:p-8 relative">
             {/* Corner sticker */}
             <div className="absolute -top-4 -right-3 rotate-3">
-              <Badge color="accent" className="!text-xs !px-3 !py-1 !border-2 shadow-[2px_2px_0_#000]">
-                LOGIN REQUIRED
+              <Badge
+                color="secondary"
+                className="!text-xs !px-3 !py-1 !border-2 shadow-[2px_2px_0_#000]"
+              >
+                SIGN IN
               </Badge>
             </div>
 
             <div className="mb-6">
               <h2 className="text-xl font-black uppercase tracking-wider text-neo-ink flex items-center gap-2">
                 <ShieldCheck size={22} strokeWidth={3} className="text-neo-ink" />
-                Organizer Portal
+                Welcome to ChronOps
               </h2>
               <p className="text-xs font-bold text-neo-ink/60 uppercase tracking-wider mt-1">
-                Sign in to manage tasks, anchor scripts & live stage run-sheets.
+                Full control over event taskboards, live stage, AI radar & communications.
               </p>
             </div>
 
@@ -140,7 +188,6 @@ export default function Login() {
                   submitting ? "opacity-60 cursor-not-allowed" : "",
                 ].join(" ")}
               >
-                {/* Google "G" SVG Icon */}
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
@@ -166,12 +213,12 @@ export default function Login() {
               <div className="flex items-center gap-3 py-1">
                 <div className="flex-1 h-1 bg-neo-ink/20" />
                 <span className="text-[11px] font-black uppercase text-neo-ink/50 tracking-widest">
-                  OR FAST TRACK
+                  OR
                 </span>
                 <div className="flex-1 h-1 bg-neo-ink/20" />
               </div>
 
-              {/* Anonymous Demo Sign In */}
+              {/* Demo Sign In */}
               <button
                 type="button"
                 onClick={handleDemoSignIn}
@@ -189,12 +236,65 @@ export default function Login() {
                 <span>Continue as Demo</span>
                 <ArrowRight size={18} strokeWidth={3} className="shrink-0" />
               </button>
+
+              {/* Volunteer Quick Login */}
+              <form onSubmit={handleVolunteerSubmit} className="space-y-3 pt-2">
+                <div className="flex items-center gap-3 py-1">
+                  <div className="flex-1 h-1 bg-neo-ink/20" />
+                  <span className="text-[11px] font-black uppercase text-neo-ink/50 tracking-widest">
+                    OR VOLUNTEER LOGIN
+                  </span>
+                  <div className="flex-1 h-1 bg-neo-ink/20" />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black uppercase text-neo-ink mb-1">
+                    Volunteer Name
+                  </label>
+                  <Input
+                    placeholder="e.g. Rahul Sharma"
+                    value={volunteerName}
+                    onChange={(e) => setVolunteerName(e.target.value)}
+                    className="!h-10 text-xs font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black uppercase text-neo-ink mb-1">
+                    Email Address
+                  </label>
+                  <Input
+                    type="email"
+                    placeholder="e.g. rahul@volunteer.org"
+                    value={volunteerEmail}
+                    onChange={(e) => setVolunteerEmail(e.target.value)}
+                    className="!h-10 text-xs font-bold"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting || loading}
+                  className={[
+                    "w-full h-12 bg-neo-muted text-neo-ink border-4 border-neo-ink",
+                    "font-black text-xs uppercase tracking-wider",
+                    "shadow-neo hover:shadow-neo-lg transition-all duration-100 ease-linear",
+                    "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
+                    "flex items-center justify-center gap-2 cursor-pointer",
+                    submitting ? "opacity-60 cursor-not-allowed" : "",
+                  ].join(" ")}
+                >
+                  <Users size={16} strokeWidth={3} className="shrink-0" />
+                  <span>Enter as Volunteer</span>
+                  <ArrowRight size={16} strokeWidth={3} className="shrink-0" />
+                </button>
+              </form>
             </div>
 
             {/* Note info */}
             <div className="mt-6 pt-4 border-t-2 border-neo-ink/10 text-center">
               <p className="text-[11px] font-bold text-neo-ink/60 uppercase tracking-wider">
-                Demo mode enables full local access to HackGenesis 2026 data.
+                Full local control and event management. No login required for Demo mode.
               </p>
             </div>
           </div>
@@ -236,9 +336,99 @@ export default function Login() {
 
       {/* ─── Footer ─── */}
       <footer className="relative z-10 w-full border-t-4 border-neo-ink bg-neo-white px-6 py-3 flex items-center justify-between text-xs font-black uppercase text-neo-ink tracking-wider">
-        <span>ChronOpsAI • HackGenesis 2026</span>
-        <span>Firebase Auth & Firestore</span>
+        <span>ChronOps • Event Operations</span>
+        <span>Powered by Gemini AI</span>
       </footer>
+
+      {/* ─── Google Account Modal ─── */}
+      <Modal
+        open={googleModalOpen}
+        onClose={() => setGoogleModalOpen(false)}
+        title="Sign In with Google"
+        size="md"
+      >
+        <form onSubmit={handleGoogleModalSubmit} className="space-y-4">
+          <div className="flex items-center gap-3 p-3 bg-neo-bg border-2 border-neo-ink">
+            <svg className="w-8 h-8 shrink-0" viewBox="0 0 24 24">
+              <path
+                fill="#4285F4"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+              />
+            </svg>
+            <div>
+              <p className="text-xs font-black uppercase text-neo-ink">
+                Connect Google Account
+              </p>
+              <p className="text-[11px] font-bold text-neo-ink/70">
+                Sign in to manage ChronOps live operations and tasks.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider mb-1">
+              Your Name
+            </label>
+            <Input
+              type="text"
+              placeholder="e.g. Alex Morgan"
+              value={googleName}
+              onChange={(e) => setGoogleName(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider mb-1">
+              Google Email Address
+            </label>
+            <Input
+              type="email"
+              placeholder="e.g. alex.morgan@gmail.com"
+              value={googleEmail}
+              onChange={(e) => setGoogleEmail(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="p-2.5 bg-blue-50 border border-blue-300 text-blue-900 text-[11px] font-medium leading-relaxed">
+            💡 <strong>Pro Tip:</strong> To enable the automatic browser popup directly without this prompt, toggle <strong>Google</strong> to enabled in Firebase Console → <em>Authentication → Sign-in method</em>.
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t-2 border-neo-ink/10">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setGoogleModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={submitting || !googleEmail.trim()}
+              className="flex items-center gap-2"
+            >
+              <span>{submitting ? "Signing in..." : "Continue with Google"}</span>
+              <ArrowRight size={14} strokeWidth={3} />
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

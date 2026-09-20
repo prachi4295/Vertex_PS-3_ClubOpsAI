@@ -37,17 +37,11 @@ const statusConfig = {
 };
 
 import { INITIAL_EVENTS } from "../data/multiEvents";
-
-const LOCAL_EVENTS_STORAGE_KEY = "clubops_all_events_list";
+import { getStoredEvents } from "../lib/storage";
 
 function loadSavedEvents() {
-  try {
-    const raw = localStorage.getItem(LOCAL_EVENTS_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    console.warn("Failed to load events in LiveFlowPreview:", e);
-  }
-  return INITIAL_EVENTS;
+  const stored = getStoredEvents();
+  return stored.length > 0 ? stored : INITIAL_EVENTS;
 }
 
 /**
@@ -65,8 +59,20 @@ export default function LiveFlowPreview({ eventId }) {
   const { searchQuery } = useApp();
   const [events, setEvents] = useState(loadSavedEvents);
   const [selectedEventId, setSelectedEventId] = useState(
-    eventId || (events[0] && events[0].id) || "hackgenesis-2026"
+    eventId || (events[0] && events[0].id) || "chronops-summit-2026"
   );
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      const refreshed = loadSavedEvents();
+      setEvents(refreshed);
+      if (refreshed.length > 0 && !refreshed.some((e) => e.id === selectedEventId)) {
+        setSelectedEventId(refreshed[0].id);
+      }
+    };
+    window.addEventListener("clubops-data-updated", handleUpdate);
+    return () => window.removeEventListener("clubops-data-updated", handleUpdate);
+  }, [selectedEventId]);
 
   const activeEventId = eventId || selectedEventId;
 
