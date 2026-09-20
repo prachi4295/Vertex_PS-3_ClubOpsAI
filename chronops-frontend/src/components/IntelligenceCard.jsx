@@ -278,13 +278,13 @@ export default function IntelligenceCard() {
       const result = await reframeTranscriptWithAI(notes);
       setReframedData(result);
 
-      // 2. Prepopulate confirmation prompt form with AI extracted details
+      // 2. Prepopulate confirmation prompt form strictly with details from transcript (never invent details)
       setReframeForm({
-        name: result.suggestedName || "ChronOps Innovation Summit 2026",
-        category: result.category || "Flagship Hackathon",
+        name: result.suggestedName || "",
+        category: result.category || "Other",
         tagline: result.tagline || "",
-        date: result.date || new Date().toISOString().split("T")[0],
-        location: result.location || "Main Auditorium",
+        date: result.date || "", // Empty if missing from transcript
+        location: (result.location && !/^(tbd|unknown|none|n\/a)$/i.test(result.location)) ? result.location : "", // Empty if missing from transcript
       });
 
       // 3. Set default choice and open explicit confirmation prompt modal
@@ -764,7 +764,7 @@ export default function IntelligenceCard() {
             <div className="space-y-3 pt-1">
               <h4 className="font-black text-xs uppercase tracking-wider text-neo-ink flex items-center gap-1.5">
                 <Sparkles size={14} strokeWidth={3} className="text-neo-secondary" />
-                1. AI Suggested Event Details:
+                1. Event Details (from Transcript):
               </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -779,7 +779,7 @@ export default function IntelligenceCard() {
                       setReframeForm((prev) => ({ ...prev, name: e.target.value }))
                     }
                     className="w-full px-2 py-1.5 text-xs font-black border-2 border-neo-ink bg-neo-white outline-none focus:bg-amber-50"
-                    placeholder="e.g. ChronOps Hackathon 2026"
+                    placeholder="Enter event name (e.g. Leadership Summit)..."
                   />
                 </div>
 
@@ -813,7 +813,7 @@ export default function IntelligenceCard() {
                       setReframeForm((prev) => ({ ...prev, tagline: e.target.value }))
                     }
                     className="w-full px-2 py-1.5 text-xs font-bold border-2 border-neo-ink bg-neo-white outline-none"
-                    placeholder="e.g. 36 Hours of Autonomous AI Building"
+                    placeholder="Optional subtitle or tagline"
                   />
                 </div>
 
@@ -868,7 +868,7 @@ export default function IntelligenceCard() {
                     onChange={(e) =>
                       setReframeForm((prev) => ({ ...prev, location: e.target.value }))
                     }
-                    placeholder="e.g. Main Campus Auditorium"
+                    placeholder="Enter venue or location..."
                     className={[
                       "w-full px-2 py-1.5 text-xs font-bold border-2 outline-none",
                       !reframeForm.location
@@ -936,7 +936,7 @@ export default function IntelligenceCard() {
           )}
 
           {/* AI Extracted Stage Sessions preview */}
-          {reframedData?.sessions && reframedData.sessions.length > 0 && (
+          {reframedData?.sessions && (
             <div className="space-y-1.5">
               <label className="text-xs font-black uppercase tracking-wider text-neo-ink flex items-center justify-between">
                 <span>
@@ -946,21 +946,27 @@ export default function IntelligenceCard() {
                   {confirmChoice === "create_new" ? "Will populate Live Flow" : "Stage sessions (preview only)"}
                 </span>
               </label>
-              <div className="border-2 border-neo-ink bg-neo-white max-h-36 overflow-y-auto divide-y divide-neo-ink/15">
-                {reframedData.sessions.map((s, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between text-xs font-bold px-3 py-2 hover:bg-neo-bg/30 transition-colors"
-                  >
-                    <span className="truncate flex-1 text-neo-ink">
-                      {s.title} {s.speaker ? `— ${s.speaker}` : ""}
-                    </span>
-                    <span className="text-[10px] font-black bg-neo-secondary px-2 py-0.5 border border-neo-ink ml-2 shrink-0">
-                      {s.startTime || "TBD"} ({s.durationMinutes || 30}m)
-                    </span>
-                  </div>
-                ))}
-              </div>
+              {reframedData.sessions.length === 0 ? (
+                <div className="border-2 border-dashed border-neo-ink/40 bg-neo-bg/30 p-2.5 text-center text-xs font-bold text-neo-ink/60">
+                  No schedule or sessions mentioned in transcript.
+                </div>
+              ) : (
+                <div className="border-2 border-neo-ink bg-neo-white max-h-36 overflow-y-auto divide-y divide-neo-ink/15">
+                  {reframedData.sessions.map((s, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between text-xs font-bold px-3 py-2 hover:bg-neo-bg/30 transition-colors"
+                    >
+                      <span className="truncate flex-1 text-neo-ink">
+                        {s.title} {s.speaker ? `— ${s.speaker}` : ""}
+                      </span>
+                      <span className="text-[10px] font-black bg-neo-secondary px-2 py-0.5 border border-neo-ink ml-2 shrink-0">
+                        {s.startTime || "TBD"} ({s.durationMinutes || 30}m)
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -975,42 +981,48 @@ export default function IntelligenceCard() {
                   Will add to Kanban Backlog
                 </span>
               </label>
-              <div className="border-2 border-neo-ink bg-neo-white max-h-40 overflow-y-auto divide-y divide-neo-ink/15">
-                {reframedData.tasks.map((t, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between text-xs font-bold px-3 py-2 hover:bg-neo-bg/30 transition-colors"
-                  >
-                    <span className="truncate flex-1 text-neo-ink">{t.title}</span>
-                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                      {t.assignee && (
-                        <span className="text-[10px] font-bold bg-neo-bg px-1.5 py-0.5 border border-neo-ink/40">
-                          {t.assignee}
+              {reframedData.tasks.length === 0 ? (
+                <div className="border-2 border-dashed border-neo-ink/40 bg-neo-bg/30 p-2.5 text-center text-xs font-bold text-neo-ink/60">
+                  No actionable tasks mentioned in transcript. Add tasks below if needed.
+                </div>
+              ) : (
+                <div className="border-2 border-neo-ink bg-neo-white max-h-40 overflow-y-auto divide-y divide-neo-ink/15">
+                  {reframedData.tasks.map((t, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between text-xs font-bold px-3 py-2 hover:bg-neo-bg/30 transition-colors"
+                    >
+                      <span className="truncate flex-1 text-neo-ink">{t.title}</span>
+                      <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                        {t.assignee && (
+                          <span className="text-[10px] font-bold bg-neo-bg px-1.5 py-0.5 border border-neo-ink/40">
+                            {t.assignee}
+                          </span>
+                        )}
+                        <span className={[
+                          "text-[9px] font-black uppercase px-1.5 py-0.5 border border-neo-ink/40",
+                          t.priority === "high" ? "bg-neo-accent text-neo-white" : t.priority === "medium" ? "bg-neo-secondary text-neo-ink" : "bg-neo-muted text-neo-ink",
+                        ].join(" ")}>
+                          {t.priority}
                         </span>
-                      )}
-                      <span className={[
-                        "text-[9px] font-black uppercase px-1.5 py-0.5 border border-neo-ink/40",
-                        t.priority === "high" ? "bg-neo-accent text-neo-white" : t.priority === "medium" ? "bg-neo-secondary text-neo-ink" : "bg-neo-muted text-neo-ink",
-                      ].join(" ")}>
-                        {t.priority}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReframedData((prev) => ({
-                            ...prev,
-                            tasks: prev.tasks.filter((_, i) => i !== idx),
-                          }));
-                        }}
-                        className="text-neo-accent hover:text-neo-ink cursor-pointer bg-transparent border-0 p-0.5 ml-0.5"
-                        title="Remove task"
-                      >
-                        <X size={13} strokeWidth={3} />
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReframedData((prev) => ({
+                              ...prev,
+                              tasks: prev.tasks.filter((_, i) => i !== idx),
+                            }));
+                          }}
+                          className="text-neo-accent hover:text-neo-ink cursor-pointer bg-transparent border-0 p-0.5 ml-0.5"
+                          title="Remove task"
+                        >
+                          <X size={13} strokeWidth={3} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
 
               {/* Add Task Inline Form */}
               <div className="flex items-end gap-1.5 pt-1">

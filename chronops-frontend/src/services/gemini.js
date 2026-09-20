@@ -1245,33 +1245,36 @@ export async function reframeTranscriptWithAI(rawNotes) {
   // Dynamic heuristic extraction from rawNotes
   const lines = clean.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
-  let extractedName = "ChronOps Innovation Sprint 2026";
+  let extractedName = "";
   const titleLine = lines.find((l) => /^(?:event|summit|title|name)\s*[:\-]\s*(.+)$/i.test(l));
   if (titleLine) {
     const m = titleLine.match(/^(?:event|summit|title|name)\s*[:\-]\s*(.+)$/i);
     if (m && m[1].trim()) extractedName = m[1].trim();
   } else if (lines.length > 0 && lines[0].length <= 70 && !/^\d+[\.\)]/.test(lines[0])) {
-    extractedName = lines[0].replace(/^#+\s*/, "").replace(/^Operations Standup:\s*/i, "").trim() || extractedName;
+    extractedName = lines[0].replace(/^#+\s*/, "").replace(/^Operations Standup:\s*/i, "").trim();
   }
 
-  // Location heuristic
-  let extractedLocation = "Campus Main Auditorium";
+  // Location heuristic: ONLY if explicitly stated in text
+  let extractedLocation = "";
   const locMatch = clean.match(/\b(?:in|at|venue:?|location:?)\s+(?:the\s+)?([A-Z][a-zA-Z0-9\s]+(?:Auditorium|Hall|Lab|Plaza|Center|Room|Arena|Campus))/);
   if (locMatch) {
     extractedLocation = locMatch[1].trim();
   }
 
-  // Date heuristic
-  let extractedDate = new Date().toISOString().split("T")[0];
+  // Date heuristic: ONLY if explicitly stated in text (never invent a date)
+  let extractedDate = "";
   const dateMatch = clean.match(/\b(202\d-\d{2}-\d{2})\b/);
   if (dateMatch) {
     extractedDate = dateMatch[1];
   } else if (/\bseptember\s*(\d{1,2})\b/i.test(clean)) {
     const day = clean.match(/\bseptember\s*(\d{1,2})\b/i)[1].padStart(2, "0");
     extractedDate = `2026-09-${day}`;
+  } else if (/\boctober\s*(\d{1,2})\b/i.test(clean)) {
+    const day = clean.match(/\boctober\s*(\d{1,2})\b/i)[1].padStart(2, "0");
+    extractedDate = `2026-10-${day}`;
   }
 
-  // Task candidates
+  // Task candidates: ONLY bullet points or numbered action items actually in the notes
   const volunteerNames = ["Rahul", "Priya", "Arjun", "Neha", "Meera", "Vikram", "Kavita"];
   const heuristicTasks = [];
 
@@ -1297,9 +1300,6 @@ export async function reframeTranscriptWithAI(rawNotes) {
       let dDate = null;
       if (/\b(202\d-\d{2}-\d{2})\b/.test(taskText)) {
         dDate = taskText.match(/\b(202\d-\d{2}-\d{2})\b/)[1];
-      } else if (/\bseptember\s*(\d{1,2})\b/i.test(taskText)) {
-        const d = taskText.match(/\bseptember\s*(\d{1,2})\b/i)[1].padStart(2, "0");
-        dDate = `2026-09-${d}`;
       }
 
       let dTime = null;
@@ -1318,86 +1318,63 @@ export async function reframeTranscriptWithAI(rawNotes) {
     }
   });
 
-  // Default fallback object
-  const fallback = {
-    suggestedName: extractedName,
-    tagline: "High-Velocity Event Management & Execution",
-    category: "Flagship Hackathon",
-    description: `Event organized from transcript briefings with ${heuristicTasks.length || 3} key operational vectors.`,
-    date: extractedDate,
-    location: extractedLocation,
-    sessions: [
-      {
-        title: "Welcome & Opening Briefing",
-        speaker: "Organizing Committee",
-        startTime: "09:00",
-        durationMinutes: 30,
-        sessionType: "fixed",
-      },
-      {
-        title: "Keynote & Problem Statements",
-        speaker: "Dr. Ananya Mukherjee",
-        startTime: "09:30",
-        durationMinutes: 45,
-        sessionType: "flexible",
-      },
-    ],
-    tasks: heuristicTasks.length > 0 ? heuristicTasks : [
-      {
-        title: "Setup registration desk and welcome banner",
-        assignee: "Rahul",
-        dueDate: extractedDate,
-        dueTime: "08:30",
-        priority: "high",
-        status: "todo",
-      },
-      {
-        title: "Coordinate audio/video recording for keynote",
-        assignee: "Priya",
-        dueDate: extractedDate,
-        dueTime: "09:15",
-        priority: "medium",
-        status: "todo",
-      },
-    ],
-    missingDetails: [],
-  };
-
   const missing = [];
-  if (!/\b(auditorium|hall|lab|room|stage|campus|plaza|center|theatre|complex|venue|online)\b/i.test(clean)) {
+  if (!extractedLocation) {
     missing.push("Venue missing");
   }
-  if (!/\b(202\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|today|tomorrow)\b/i.test(clean)) {
+  if (!extractedDate) {
     missing.push("Event date missing");
   }
   if (!/\b(\d{1,2}:\d{2}|\d{1,2}\s*(?:am|pm))\b/i.test(clean)) {
     missing.push("Schedule timings missing");
   }
 
-  fallback.missingDetails = missing;
+  // Factual fallback object: DO NOT enter event details on your own
+  const fallback = {
+    suggestedName: extractedName || "",
+    tagline: "",
+    category: "Other",
+    description: "",
+    date: extractedDate || "", // Empty if not explicitly in notes
+    location: extractedLocation || "", // Empty if not explicitly in notes
+    sessions: [], // Empty if not explicitly in notes
+    tasks: heuristicTasks, // Only actual bullet items from text
+    missingDetails: missing,
+  };
 
   if (!API_KEY || API_KEY.trim() === "" || API_KEY === "your_gemini_api_key_from_ai_studio") {
     return fallback;
   }
 
   const prompt = `
-You are an expert event architect AI. Analyze this transcript or raw event briefing:
+You are an expert event analyst. Analyze this transcript or raw event notes:
 
 """
 ${clean}
 """
 
-YOUR TASK:
-1. Reframe and synthesize this explanation into a professional event specification:
-   - suggestedName: A catchy, professional name for the event (e.g., "ChronOps AI Sprint 2026").
-   - tagline: A concise, memorable 1-line subtitle.
-   - description: A clear 2-3 sentence overview of the event purpose and scope.
-   - category: One of "Flagship Hackathon", "Tech Conference", "Campus Drive", "Workshop & Bootcamp", "Competition", or "Other".
-   - date: Event date in YYYY-MM-DD format if mentioned, or null.
-   - location: Event venue/hall if mentioned, or null.
-2. Extract 2-4 key live sessions with title, speaker, startTime (HH:MM), durationMinutes (number), sessionType ('fixed'|'flexible').
-3. Extract 3-5 operational tasks for organizers with title, assignee, dueDate, dueTime, priority ('high'|'medium'|'low'), and status ('todo'|'backlog').
-4. In 'missingDetails', list any crucial omitted details as short tags under 4 words (e.g. 'Date missing', 'Venue missing', 'Timings missing').
+CRITICAL INSTRUCTION - STRICT FACTUAL ACCURACY:
+DO NOT INVENT, FABRICATE, OR ENTER EVENT DETAILS ON YOUR OWN.
+Only extract information that is explicitly stated or directly referenced in the provided text.
+
+1. Event Metadata:
+   - suggestedName: The exact name or title of the event mentioned in the text. If no specific name is given, return "".
+   - tagline: ONLY extract if a specific motto, subtitle, or tagline is explicitly written in the notes. Otherwise return "". NEVER make up marketing slogans.
+   - description: A brief summary of what is ACTUALLY stated in the text. Do not invent backstory or details.
+   - category: Best match from ["Flagship Hackathon", "Technical Workshop", "Keynote Conference", "Orientation & Recruiting", "Other"]. If unknown, use "Other".
+   - date: Event date in YYYY-MM-DD format ONLY if explicitly mentioned in the notes. If no date is mentioned in the text, return null. NEVER invent a date.
+   - location: Event venue, hall, or room name ONLY if explicitly mentioned in the text. If no location is mentioned, return null. NEVER return "TBD" or invent a venue.
+
+2. Sessions:
+   - ONLY include sessions/talks/agenda items that are explicitly listed or mentioned in the text with speakers or timings.
+   - If the text does NOT describe a schedule or sessions, return an EMPTY ARRAY []. NEVER invent placeholder sessions like "Opening Keynote" or "Panel Discussion".
+
+3. Tasks:
+   - ONLY include operational tasks or action items that are explicitly stated in the text.
+   - If no tasks or action items are mentioned, return an EMPTY ARRAY []. NEVER invent generic tasks like "Book venue" or "Finalize schedule".
+
+4. missingDetails:
+   - List any omitted details as short tags under 4 words (e.g. 'Event date missing', 'Venue missing', 'Schedule missing', 'Tasks missing').
 `.trim();
 
   try {
@@ -1446,54 +1423,71 @@ YOUR TASK:
       },
       required: ["suggestedName", "tagline", "description", "tasks", "missingDetails"],
     }, {
-      temperature: 0.2,
+      temperature: 0.1,
       timeout: 15000,
     });
 
-    const rawSessions = parsed?.sessions?.length ? parsed.sessions : fallback.sessions;
-    const cleanSessions = rawSessions.map((s, idx) => {
-      let startTime = "10:00";
-      if (s.startTime && typeof s.startTime === "string") {
-        const match = s.startTime.match(/(\d{1,2}):(\d{2})/);
-        if (match) {
-          startTime = `${match[1].padStart(2, "0")}:${match[2]}`;
+    const rawSessions = Array.isArray(parsed?.sessions) ? parsed.sessions : [];
+    const cleanSessions = rawSessions
+      .filter((s) => s && s.title && s.title.toLowerCase() !== "tbd")
+      .map((s, idx) => {
+        let startTime = "";
+        if (s.startTime && typeof s.startTime === "string") {
+          const match = s.startTime.match(/(\d{1,2}):(\d{2})/);
+          if (match) {
+            startTime = `${match[1].padStart(2, "0")}:${match[2]}`;
+          }
         }
-      }
-      return {
-        title: (s.title || `Session ${idx + 1}`).trim(),
-        speaker: (s.speaker || "").trim(),
-        startTime,
-        durationMinutes: Number(s.durationMinutes) > 0 ? Number(s.durationMinutes) : 30,
-        sessionType: s.sessionType === "fixed" ? "fixed" : "flexible",
-        order: idx + 1,
-      };
-    });
+        return {
+          title: s.title.trim(),
+          speaker: (s.speaker || "").trim(),
+          startTime: startTime || "TBD",
+          durationMinutes: Number(s.durationMinutes) > 0 ? Number(s.durationMinutes) : 30,
+          sessionType: s.sessionType === "fixed" ? "fixed" : "flexible",
+          order: idx + 1,
+        };
+      });
 
-    const rawTasks = parsed?.tasks?.length ? parsed.tasks : fallback.tasks;
-    const cleanTasks = rawTasks.map((t) => {
-      let priority = (t.priority || "medium").toLowerCase().trim();
-      if (!["low", "medium", "high"].includes(priority)) priority = "medium";
-      return {
-        title: (t.title || "Operational task").trim(),
-        assignee: (t.assignee || "").trim(),
-        dueDate: t.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(t.dueDate.trim()) ? t.dueDate.trim() : null,
-        dueTime: t.dueTime && /^\d{1,2}:\d{2}$/.test(t.dueTime.trim()) ? t.dueTime.trim() : null,
-        priority,
-        status: t.status === "in_progress" || t.status === "todo" ? t.status : "backlog",
-      };
-    });
+    const rawTasks = Array.isArray(parsed?.tasks) && parsed.tasks.length > 0 ? parsed.tasks : heuristicTasks;
+    const cleanTasks = rawTasks
+      .filter((t) => t && t.title && !/^(book venue|finalize event date|design promotional)/i.test(t.title.trim()))
+      .map((t) => {
+        let priority = (t.priority || "medium").toLowerCase().trim();
+        if (!["low", "medium", "high"].includes(priority)) priority = "medium";
+        return {
+          title: (t.title || "Task").trim(),
+          assignee: (t.assignee || "").trim(),
+          dueDate: t.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(t.dueDate.trim()) ? t.dueDate.trim() : null,
+          dueTime: t.dueTime && /^\d{1,2}:\d{2}$/.test(t.dueTime.trim()) ? t.dueTime.trim() : null,
+          priority,
+          status: t.status === "in_progress" || t.status === "todo" ? t.status : "backlog",
+        };
+      });
+
+    // Strictly ensure date, venue, and tagline are never invented
+    const parsedDate = parsed?.date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date.trim())
+      ? parsed.date.trim()
+      : (extractedDate || "");
+
+    const parsedLoc = parsed?.location && !/^(tbd|unknown|none|n\/a)$/i.test(parsed.location.trim())
+      ? parsed.location.trim()
+      : (extractedLocation || "");
+
+    const parsedTagline = parsed?.tagline && !/^(empowering innovation|high-velocity|tbd)$/i.test(parsed.tagline.trim())
+      ? parsed.tagline.trim()
+      : "";
 
     const detectedMissing = Array.isArray(parsed?.missingDetails) && parsed.missingDetails.length > 0
       ? parsed.missingDetails
       : missing;
 
     return {
-      suggestedName: parsed?.suggestedName?.trim() || fallback.suggestedName,
-      tagline: parsed?.tagline?.trim() || fallback.tagline,
-      description: parsed?.description?.trim() || fallback.description,
-      category: parsed?.category?.trim() || fallback.category,
-      date: parsed?.date?.trim() || fallback.date,
-      location: parsed?.location?.trim() || fallback.location,
+      suggestedName: parsed?.suggestedName?.trim() || extractedName || "",
+      tagline: parsedTagline,
+      description: parsed?.description?.trim() || "",
+      category: parsed?.category?.trim() || "Other",
+      date: parsedDate,
+      location: parsedLoc,
       sessions: cleanSessions,
       tasks: cleanTasks,
       missingDetails: detectedMissing,
