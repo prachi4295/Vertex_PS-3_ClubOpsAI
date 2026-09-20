@@ -1067,7 +1067,7 @@ export default function IntelligenceCard() {
               disabled={isCommitting}
               onClick={handleCancelPrompt}
             >
-              Cancel / Do Not Create
+              Cancel
             </Button>
 
             {confirmChoice === "create_new" ? (
