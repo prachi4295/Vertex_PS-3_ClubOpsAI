@@ -552,7 +552,7 @@ function EventCardItem({ event, onOpen, onEdit, onDelete, onPoster }) {
           <span className="flex items-center gap-1 text-xs font-medium text-neo-ink/80">
             <Calendar size={13} strokeWidth={2.5} />
             {formatDateDMY(event.date)}
-            {event.time ? ` • ${formatTime12(event.time)}` : ""}
+            {` • ${formatTime12(event.time || "09:00")}`}
           </span>
 
           {event.location && (

@@ -173,6 +173,9 @@ export default function VolunteerManagement() {
     status: "Available",
   });
 
+  // Multi-selection state for deleting multiple volunteers
+  const [selectedVolIds, setSelectedVolIds] = useState(new Set());
+
   const { addNotification } = useNotifications();
 
   // Sync with global updates and multi-user storage
@@ -646,11 +649,75 @@ export default function VolunteerManagement() {
     setDataRevision((v) => v + 1);
   };
 
+  // Multi-selection helpers for bulk volunteer operations
+  const allFilteredSelected =
+    filteredVolunteers.length > 0 &&
+    filteredVolunteers.every((v) => selectedVolIds.has(v.id));
+
+  const someFilteredSelected =
+    filteredVolunteers.some((v) => selectedVolIds.has(v.id)) && !allFilteredSelected;
+
+  const handleToggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedVolIds((prev) => {
+        const next = new Set(prev);
+        filteredVolunteers.forEach((v) => next.delete(v.id));
+        return next;
+      });
+    } else {
+      setSelectedVolIds((prev) => {
+        const next = new Set(prev);
+        filteredVolunteers.forEach((v) => next.add(v.id));
+        return next;
+      });
+    }
+  };
+
+  const handleToggleSelectVolunteer = (volId) => {
+    setSelectedVolIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(volId)) {
+        next.delete(volId);
+      } else {
+        next.add(volId);
+      }
+      return next;
+    });
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedVolIds(new Set());
+  };
+
+  // Delete multiple selected volunteers
+  const handleDeleteSelectedVolunteers = () => {
+    if (selectedVolIds.size === 0) return;
+    const count = selectedVolIds.size;
+    if (
+      confirm(
+        `Are you sure you want to remove ${count} selected volunteer${count > 1 ? "s" : ""} from the roster?`
+      )
+    ) {
+      const updated = volunteers.filter((v) => !selectedVolIds.has(v.id));
+      saveVolunteers(updated);
+      setSelectedVolIds(new Set());
+      addNotification({
+        message: `Removed ${count} volunteer${count > 1 ? "s" : ""} from the roster.`,
+        type: "action",
+      });
+    }
+  };
+
   // Delete volunteer
   const handleDeleteVolunteer = (volId, name) => {
     if (confirm(`Remove ${name} from the volunteer roster?`)) {
       const updated = volunteers.filter((v) => v.id !== volId);
       saveVolunteers(updated);
+      setSelectedVolIds((prev) => {
+        const next = new Set(prev);
+        next.delete(volId);
+        return next;
+      });
       addNotification({
         message: `Removed volunteer ${name}.`,
         type: "action",
@@ -750,6 +817,20 @@ export default function VolunteerManagement() {
             <Plus size={13} strokeWidth={2.5} />
             Add Volunteer
           </Button>
+
+          {/* Bulk Delete Trigger in Header */}
+          {selectedVolIds.size > 0 && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleDeleteSelectedVolunteers}
+              className="!h-9 !text-xs !px-3 font-bold flex items-center gap-1.5 shadow-[2px_2px_0_#0F172A] !bg-neo-accent !text-neo-white hover:!bg-neo-accent/90 cursor-pointer animate-fade-in"
+              title="Delete all selected volunteers"
+            >
+              <Trash2 size={13} strokeWidth={2.5} />
+              Delete ({selectedVolIds.size})
+            </Button>
+          )}
         </div>
       </div>
 
@@ -791,11 +872,54 @@ export default function VolunteerManagement() {
         </div>
       </div>
 
+      {/* ─── Bulk Action Banner (Multiple Volunteer Deletion) ─── */}
+      {selectedVolIds.size > 0 && (
+        <div className="p-3 bg-neo-ink text-neo-white border-3 border-neo-ink shadow-[3px_3px_0_#0F172A] flex items-center justify-between flex-wrap gap-2 animate-fade-in">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-black uppercase tracking-wider text-neo-secondary">
+              {selectedVolIds.size} of {volunteers.length} Volunteers Selected
+            </span>
+            <span className="text-neo-white/40">•</span>
+            <button
+              type="button"
+              onClick={handleDeselectAll}
+              className="text-[11px] font-bold uppercase underline hover:text-neo-secondary cursor-pointer bg-transparent border-0 text-neo-white px-1"
+            >
+              Clear Selection
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDeleteSelectedVolunteers}
+              className="px-3 py-1.5 bg-neo-accent text-neo-white border-2 border-neo-white font-black text-xs uppercase flex items-center gap-1.5 shadow-[2px_2px_0_#FFF] cursor-pointer hover:bg-neo-accent/90 active:translate-x-[1px] active:translate-y-[1px] transition-all"
+              title="Delete all selected volunteers"
+            >
+              <Trash2 size={13} strokeWidth={3} />
+              <span>Delete Selected ({selectedVolIds.size})</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ─── Volunteer Table ─── */}
       <div className="overflow-x-auto border-3 border-neo-ink shadow-[3px_3px_0_#0F172A]">
         <table className="w-full text-left border-collapse bg-neo-white">
           <thead>
             <tr className="bg-neo-ink text-neo-white text-xs font-bold border-b-2 border-neo-ink">
+              <th className="p-3 w-10 text-center">
+                <input
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someFilteredSelected;
+                  }}
+                  onChange={handleToggleSelectAll}
+                  className="w-4 h-4 accent-neo-accent cursor-pointer rounded-none"
+                  title={allFilteredSelected ? "Deselect All Filtered" : "Select All Filtered"}
+                />
+              </th>
               <th className="p-3">Name</th>
               <th className="p-3">Role</th>
               <th className="p-3">Email Address</th>
@@ -808,7 +932,7 @@ export default function VolunteerManagement() {
           <tbody className="divide-y-2 divide-neo-ink/15 text-xs font-medium text-neo-ink">
             {filteredVolunteers.length === 0 ? (
               <tr>
-                <td colSpan="7" className="p-6 text-center text-neo-ink/60 font-bold">
+                <td colSpan="8" className="p-6 text-center text-neo-ink/60 font-bold">
                   No volunteers found in this status filter.
                 </td>
               </tr>
@@ -819,7 +943,26 @@ export default function VolunteerManagement() {
                   vol.email || `${vol.name.toLowerCase().replace(/\s+/g, ".")}@chronops.io`;
 
                 return (
-                  <tr key={vol.id} className="hover:bg-neo-secondary/20 transition-colors">
+                  <tr
+                    key={vol.id}
+                    className={[
+                      "transition-colors",
+                      selectedVolIds.has(vol.id)
+                        ? "bg-neo-secondary/35 hover:bg-neo-secondary/45"
+                        : "hover:bg-neo-secondary/20",
+                    ].join(" ")}
+                  >
+                    {/* Multi-select Checkbox */}
+                    <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedVolIds.has(vol.id)}
+                        onChange={() => handleToggleSelectVolunteer(vol.id)}
+                        className="w-4 h-4 accent-neo-accent cursor-pointer rounded-none"
+                        title={`Select ${vol.name} for bulk action`}
+                      />
+                    </td>
+
                     {/* Name */}
                     <td className="p-3 font-bold text-sm text-neo-ink">{vol.name}</td>
 

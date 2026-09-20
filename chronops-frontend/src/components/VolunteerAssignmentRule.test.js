@@ -79,3 +79,36 @@ describe("Volunteer Assignment Rule: Priority to Available over Active", () => {
     expect(selected.status).toBe("Available");
   });
 });
+
+describe("Volunteer Multi-Deletion and Selection Logic", () => {
+  const initialRoster = [
+    { id: "vol-1", name: "Rahul", status: "Active" },
+    { id: "vol-2", name: "Priya", status: "Available" },
+    { id: "vol-3", name: "Amit", status: "Off Duty" },
+    { id: "vol-4", name: "Sara", status: "Active" },
+  ];
+
+  it("filters out multiple selected volunteer IDs correctly", () => {
+    const selectedIds = new Set(["vol-1", "vol-3"]);
+    const updated = initialRoster.filter((v) => !selectedIds.has(v.id));
+
+    expect(updated).toHaveLength(2);
+    expect(updated.map((v) => v.id)).toEqual(["vol-2", "vol-4"]);
+  });
+
+  it("handles selecting all filtered volunteers and clearing selection", () => {
+    const selectedIds = new Set();
+    const filtered = initialRoster.filter((v) => v.status === "Active"); // Rahul, Sara
+    
+    // Select all filtered
+    filtered.forEach((v) => selectedIds.add(v.id));
+    expect(selectedIds.size).toBe(2);
+    expect(selectedIds.has("vol-1")).toBe(true);
+    expect(selectedIds.has("vol-4")).toBe(true);
+
+    // Delete selected
+    const remaining = initialRoster.filter((v) => !selectedIds.has(v.id));
+    expect(remaining).toHaveLength(2);
+    expect(remaining.map((v) => v.name)).toEqual(["Priya", "Amit"]);
+  });
+});

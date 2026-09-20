@@ -83,4 +83,15 @@ describe("LiveStageView Mechanics and Invariants", () => {
     expect(mockLiveSession.phoneticGuide).toBe("ah-NAN-yah MOO-kher-jee");
     expect(mockNextSession.phoneticGuide).toBe("vik-RUM mal-HOH-trah");
   });
+
+  it("handles empty event lists and null activeEvent without throwing TypeError", () => {
+    const events = [];
+    const selectedEventId = "non-existent";
+    const activeEvent = events.find((e) => e.id === selectedEventId) || events[0] || null;
+
+    expect(activeEvent).toBeNull();
+    // Invariant: Display name access must never throw
+    const displayName = activeEvent?.name || "This event";
+    expect(displayName).toBe("This event");
+  });
 });

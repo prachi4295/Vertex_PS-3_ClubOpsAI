@@ -24,9 +24,11 @@ function ProtectedRoute({ children }) {
       <div className="min-h-screen bg-neo-bg flex flex-col items-center justify-center p-4">
         <div className="bg-neo-white border-4 border-neo-ink p-8 shadow-neo-lg text-center max-w-sm w-full">
           <Star size={36} strokeWidth={3} className="text-neo-secondary animate-spin-slow mx-auto mb-4" />
-          <h2 className="font-black text-xl uppercase tracking-wider text-neo-ink mb-1">
-            ChronOps
-          </h2>
+          <img
+            src="/chronops-logo.png"
+            alt="ChronOps"
+            className="h-10 w-auto object-contain mx-auto mb-3"
+          />
           <p className="text-xs font-bold text-neo-ink/60 uppercase tracking-wide">
             Authenticating organizer session...
           </p>

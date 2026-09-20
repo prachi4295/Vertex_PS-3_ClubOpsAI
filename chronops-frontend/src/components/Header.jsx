@@ -68,13 +68,17 @@ export default function Header() {
           <button
             type="button"
             onClick={handleBrandClick}
-            className="flex items-center gap-2 shrink-0 cursor-pointer border-0 bg-transparent p-0"
+            className="flex items-center shrink-0 cursor-pointer border-0 bg-transparent p-0 group"
             title="Go to ChronOps Home"
             aria-label="ChronOps Home"
           >
-            <span className="bg-neo-accent border-4 border-neo-ink px-3 py-1 font-black text-sm tracking-tight text-neo-ink shadow-neo-sm hover:shadow-neo transition-all active:translate-x-[1px] active:translate-y-[1px]">
-              ChronOps
-            </span>
+            <div className="bg-neo-white border-3 border-neo-ink px-2.5 py-1 shadow-neo-sm hover:shadow-neo transition-all active:translate-x-[1px] active:translate-y-[1px] flex items-center">
+              <img
+                src="/chronops-logo.png"
+                alt="ChronOps"
+                className="h-6 sm:h-7 w-auto object-contain"
+              />
+            </div>
           </button>
 
           {/* ─── Mode tabs ─── */}

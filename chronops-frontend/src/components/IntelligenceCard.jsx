@@ -38,6 +38,7 @@ import {
   reframeTranscriptWithAI,
 } from "../services/gemini";
 import { setSessionsBatchForEvent } from "../hooks/useSessions";
+import { isEventDue } from "../lib/eventScheduler";
 import { formatDuration } from "../lib/time";
 import { INITIAL_EVENTS } from "../data/multiEvents";
 import {
@@ -319,6 +320,9 @@ export default function IntelligenceCard() {
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/(^-|-$)/g, "") + `-${Date.now().toString(36).slice(-4)}`;
 
+      const scheduledTime = reframeForm.time || reframedData.time || reframedData.sessions?.[0]?.startTime || "09:00";
+      const initialDue = isEventDue({ date: reframeForm.date, time: scheduledTime });
+
       const newEvent = {
         id: newEventId,
         ownerEmail: getActiveUserEmail(),
@@ -326,8 +330,9 @@ export default function IntelligenceCard() {
         category: reframeForm.category,
         tagline: reframeForm.tagline.trim(),
         date: reframeForm.date,
+        time: scheduledTime,
         location: reframeForm.location.trim(),
-        status: "active",
+        status: initialDue ? "active" : "upcoming",
         color: "accent",
       };
 

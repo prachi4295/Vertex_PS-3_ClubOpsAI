@@ -120,9 +120,13 @@ export default function Login() {
       {/* ─── Top Brand Bar ─── */}
       <header className="relative z-10 w-full border-b-4 border-neo-ink bg-neo-white px-4 sm:px-6 py-3.5 flex items-center justify-between shadow-neo-sm">
         {/* Left End: Brand Logo */}
-        <div className="flex items-center gap-2 bg-neo-ink text-neo-white px-3.5 py-1.5 font-black tracking-wider text-sm border-2 border-neo-ink shadow-[2px_2px_0_#000]">
-          <span className="w-2.5 h-2.5 bg-neo-accent rounded-full animate-pulse" />
-          ChronOps
+        <div className="flex items-center">
+          <img
+            src="/chronops-logo.png"
+            alt="ChronOps"
+            className="h-8 sm:h-9 w-auto object-contain cursor-pointer"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          />
         </div>
 
         {/* Right Corner: Login / Sign Up options */}

@@ -87,6 +87,12 @@ export default function LiveStageView({ initialEventId }) {
     events[0] ||
     null;
 
+  useEffect(() => {
+    if (events.length > 0 && (!selectedEventId || !events.some((e) => e.id === selectedEventId))) {
+      setSelectedEventId(events[0].id);
+    }
+  }, [events, selectedEventId]);
+
   const {
     sessions,
     startSession,
@@ -388,11 +394,11 @@ export default function LiveStageView({ initialEventId }) {
 
   // ─── Reset Demo Action ───
   const handleResetDemo = async () => {
-    if (window.confirm(`Reset all ${activeEvent.name} data and sessions back to initial state?`)) {
+    if (window.confirm(`Reset all ${activeEvent?.name || "event"} data and sessions back to initial state?`)) {
       await resetDemoData();
       resetClock(new Date("2026-09-19T09:35:00"));
       addNotification({
-        message: `Demo data cleanly reset for ${activeEvent.name}.`,
+        message: `Demo data cleanly reset for ${activeEvent?.name || "event"}.`,
         type: "action",
       });
     }
@@ -414,21 +420,27 @@ export default function LiveStageView({ initialEventId }) {
             <select
               value={selectedEventId}
               onChange={(e) => setSelectedEventId(e.target.value)}
-              className="font-black text-sm bg-transparent border-none outline-none cursor-pointer text-neo-ink pr-2"
+              disabled={events.length === 0}
+              className="font-black text-sm bg-transparent border-none outline-none cursor-pointer text-neo-ink pr-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {events.map((ev) => (
-                <option key={ev.id} value={ev.id} className="font-bold">
-                  {ev.name}
-                </option>
-              ))}
+              {events.length === 0 ? (
+                <option value="">No Events Available</option>
+              ) : (
+                events.map((ev) => (
+                  <option key={ev.id} value={ev.id} className="font-bold">
+                    {ev.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
           {/* Configure Sessions with AI Button */}
           <button
             type="button"
+            disabled={!activeEvent}
             onClick={() => setConfigureModalOpen(true)}
-            className="min-h-[36px] px-3 bg-neo-accent border-2 border-neo-ink font-black text-xs uppercase flex items-center gap-1.5 shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer hover:bg-neo-accent/90"
+            className="min-h-[36px] px-3 bg-neo-accent border-2 border-neo-ink font-black text-xs uppercase flex items-center gap-1.5 shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer hover:bg-neo-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Configure sessions with AI for this event"
           >
             <Sparkles size={14} strokeWidth={3} />
@@ -754,6 +766,19 @@ export default function LiveStageView({ initialEventId }) {
             </div>
           )}
         </div>
+      ) : !activeEvent ? (
+        /* No Event Available */
+        <div className="p-8 text-center bg-neo-white border-4 border-neo-ink shadow-neo my-auto">
+          <div className="w-12 h-12 rounded-full bg-neo-secondary border-4 border-neo-ink flex items-center justify-center mx-auto mb-3 shadow-neo-sm">
+            <Radio size={24} strokeWidth={3} />
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-neo-ink mb-1">
+            No Event Selected
+          </h2>
+          <p className="text-xs sm:text-sm font-bold text-neo-ink/70 max-w-md mx-auto mb-6">
+            There are no active events available for your account. Please create an event in the Taskboards to start monitoring live stage operations.
+          </p>
+        </div>
       ) : sessions.length === 0 ? (
         /* No Sessions Configured for this event */
         <div className="p-8 text-center bg-neo-white border-4 border-neo-ink shadow-neo my-auto">
@@ -764,7 +789,7 @@ export default function LiveStageView({ initialEventId }) {
             No Sessions Configured
           </h2>
           <p className="text-xs sm:text-sm font-bold text-neo-ink/70 max-w-md mx-auto mb-6">
-            "{activeEvent.name}" doesn't have any scheduled stage sessions yet. Use AI to generate an entire run-of-show timeline in seconds!
+            "{activeEvent?.name || "This event"}" doesn't have any scheduled stage sessions yet. Use AI to generate an entire run-of-show timeline in seconds!
           </p>
           <Button
             variant="primary"

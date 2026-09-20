@@ -49,7 +49,12 @@ export function getStoredEvents(userEmail = null) {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed.filter((e) => !DEMO_EVENT_IDS.includes(e.id));
+        return parsed
+          .filter((e) => !DEMO_EVENT_IDS.includes(e.id))
+          .map((e) => ({
+            ...e,
+            time: e.time || "09:00",
+          }));
       }
     }
   } catch (e) {

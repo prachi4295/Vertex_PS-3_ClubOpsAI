@@ -204,7 +204,7 @@ export default function EventTaskboardPage() {
               <span className="flex items-center gap-1.5 text-xs font-bold text-neo-ink/80 uppercase">
                 <Calendar size={14} strokeWidth={3} />
                 {formatDateDMY(event.date)}
-                {event.time ? ` • ${formatTime12(event.time)}` : ""}
+                {` • ${formatTime12(event.time || "09:00")}`}
               </span>
 
               {event.location && (
