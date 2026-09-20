@@ -1469,7 +1469,7 @@ Only extract information that is explicitly stated or directly referenced in the
       ? parsed.date.trim()
       : (extractedDate || "");
 
-    const parsedLoc = parsed?.location && !/^(tbd|unknown|none|n\/a)$/i.test(parsed.location.trim())
+    const parsedLoc = parsed?.location && !/^(tbd|unknown|none|n\/a|null|undefined)$/i.test(parsed.location.trim())
       ? parsed.location.trim()
       : (extractedLocation || "");
 

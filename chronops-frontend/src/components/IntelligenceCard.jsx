@@ -284,7 +284,7 @@ export default function IntelligenceCard() {
         category: result.category || "Other",
         tagline: result.tagline || "",
         date: result.date || "", // Empty if missing from transcript
-        location: (result.location && !/^(tbd|unknown|none|n\/a)$/i.test(result.location)) ? result.location : "", // Empty if missing from transcript
+        location: (result.location && !/^(tbd|unknown|none|n\/a|null|undefined)$/i.test(result.location.trim())) ? result.location.trim() : "", // Empty if missing from transcript
       });
 
       // 3. Set default choice and open explicit confirmation prompt modal
@@ -770,7 +770,7 @@ export default function IntelligenceCard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                 <div className="sm:col-span-2">
                   <label className="block text-[10px] font-black uppercase text-neo-ink/70 mb-0.5">
-                    Event Name *
+                    Event Name <span className="text-red-600 font-bold text-xs">*</span>
                   </label>
                   <input
                     type="text"
@@ -778,7 +778,10 @@ export default function IntelligenceCard() {
                     onChange={(e) =>
                       setReframeForm((prev) => ({ ...prev, name: e.target.value }))
                     }
-                    className="w-full px-2 py-1.5 text-xs font-black border-2 border-neo-ink bg-neo-white outline-none focus:bg-amber-50"
+                    className={[
+                      "w-full px-2 py-1.5 text-xs font-black border-2 bg-neo-white outline-none focus:bg-amber-50 transition-colors",
+                      !reframeForm.name ? "border-red-500" : "border-neo-ink",
+                    ].join(" ")}
                     placeholder="Enter event name (e.g. Leadership Summit)..."
                   />
                 </div>
@@ -818,61 +821,39 @@ export default function IntelligenceCard() {
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-0.5">
-                    <label className="text-[10px] font-black uppercase text-neo-ink/70">
-                      Event Date *
-                    </label>
-                    {(!reframeForm.date ||
-                      reframedData?.missingDetails?.some((d) =>
-                        d.toLowerCase().includes("date")
-                      )) && (
-                      <span className="text-[9px] font-black text-amber-800 bg-amber-200 px-1 border border-amber-400 uppercase">
-                        Missing from Transcript
-                      </span>
-                    )}
-                  </div>
+                  <label className="block text-[10px] font-black uppercase text-neo-ink/70 mb-0.5">
+                    Event Date <span className="text-red-600 font-bold text-xs">*</span>
+                  </label>
                   <input
                     type="date"
-                    value={reframeForm.date}
+                    value={reframeForm.date || ""}
                     onChange={(e) =>
                       setReframeForm((prev) => ({ ...prev, date: e.target.value }))
                     }
                     className={[
-                      "w-full px-2 py-1.5 text-xs font-bold border-2 outline-none",
+                      "w-full px-2 py-1.5 text-xs font-bold border-2 outline-none transition-colors",
                       !reframeForm.date
-                        ? "border-amber-500 bg-amber-50"
+                        ? "border-red-500 bg-neo-white focus:bg-red-50/40"
                         : "border-neo-ink bg-neo-white",
                     ].join(" ")}
                   />
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-0.5">
-                    <label className="text-[10px] font-black uppercase text-neo-ink/70">
-                      Venue / Location *
-                    </label>
-                    {(!reframeForm.location ||
-                      reframedData?.missingDetails?.some(
-                        (d) =>
-                          d.toLowerCase().includes("venue") ||
-                          d.toLowerCase().includes("location")
-                      )) && (
-                      <span className="text-[9px] font-black text-amber-800 bg-amber-200 px-1 border border-amber-400 uppercase">
-                        Missing from Transcript
-                      </span>
-                    )}
-                  </div>
+                  <label className="block text-[10px] font-black uppercase text-neo-ink/70 mb-0.5">
+                    Venue / Location <span className="text-red-600 font-bold text-xs">*</span>
+                  </label>
                   <input
                     type="text"
-                    value={reframeForm.location}
+                    value={reframeForm.location || ""}
                     onChange={(e) =>
                       setReframeForm((prev) => ({ ...prev, location: e.target.value }))
                     }
                     placeholder="Enter venue or location..."
                     className={[
-                      "w-full px-2 py-1.5 text-xs font-bold border-2 outline-none",
+                      "w-full px-2 py-1.5 text-xs font-bold border-2 outline-none transition-colors",
                       !reframeForm.location
-                        ? "border-amber-500 bg-amber-50"
+                        ? "border-red-500 bg-neo-white focus:bg-red-50/40"
                         : "border-neo-ink bg-neo-white",
                     ].join(" ")}
                   />
