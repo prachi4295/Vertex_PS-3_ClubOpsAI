@@ -488,17 +488,34 @@ export default function IntelligenceCard() {
             </div>
 
             {isSpeechSupported && (
-              <button
-                type="button"
-                onClick={() =>
-                  setSpeechLang((prev) => (prev === "en-IN" ? "hi-IN" : "en-IN"))
-                }
-                title="Switch voice language"
-                className="text-[11px] font-bold text-neo-ink/70 hover:text-neo-ink flex items-center gap-1 cursor-pointer"
-              >
-                <Globe size={11} strokeWidth={2.5} />
-                {speechLang === "en-IN" ? "EN" : "HI"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleRecording}
+                  className={[
+                    "text-[11px] font-bold px-2 py-0.5 border-2 border-neo-ink flex items-center gap-1 cursor-pointer transition-all shadow-[1px_1px_0_#000]",
+                    isRecording
+                      ? "bg-neo-accent text-neo-white animate-pulse"
+                      : "bg-neo-white text-neo-ink hover:bg-neo-secondary",
+                  ].join(" ")}
+                  title={isRecording ? "Stop recording" : `Voice input (${speechLang})`}
+                >
+                  {isRecording ? <MicOff size={12} strokeWidth={2.5} /> : <Mic size={12} strokeWidth={2.5} />}
+                  <span>{isRecording ? "Listening..." : "Dictate"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSpeechLang((prev) => (prev === "en-IN" ? "hi-IN" : "en-IN"))
+                  }
+                  title="Switch voice language"
+                  className="text-[11px] font-bold text-neo-ink/70 hover:text-neo-ink flex items-center gap-1 cursor-pointer"
+                >
+                  <Globe size={11} strokeWidth={2.5} />
+                  {speechLang === "en-IN" ? "EN" : "HI"}
+                </button>
+              </div>
             )}
           </div>
 
@@ -569,23 +586,24 @@ export default function IntelligenceCard() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Paste standup notes or transcript. AI will extract event details, sessions, and tasks, then prompt to create the event..."
-              className="!text-xs leading-relaxed"
+              className="!text-xs leading-relaxed !resize-none !pr-14 !pb-12"
             />
 
-            {/* Voice Input Trigger Icon inside textarea bottom-right */}
+            {/* Voice Input Trigger Icon neatly nested inside textarea with proper spacing */}
             {isSpeechSupported && (
               <button
                 type="button"
                 onClick={toggleRecording}
                 className={[
-                  "absolute right-2 bottom-2 p-1.5 border border-neo-ink rounded-none cursor-pointer transition-all",
+                  "absolute right-3.5 bottom-3.5 z-10 w-8 h-8 flex items-center justify-center border-2 border-neo-ink cursor-pointer transition-all",
                   isRecording
-                    ? "bg-neo-accent text-neo-white animate-pulse"
-                    : "bg-neo-white text-neo-ink hover:bg-neo-bg shadow-[1px_1px_0_#000]",
+                    ? "bg-neo-accent text-neo-white animate-pulse shadow-[2px_2px_0_#000]"
+                    : "bg-neo-white text-neo-ink hover:bg-neo-secondary shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none",
                 ].join(" ")}
-                title={isRecording ? "Stop recording" : `Voice input (${speechLang})`}
+                title={isRecording ? "Stop recording" : `Voice dictation (${speechLang})`}
+                aria-label={isRecording ? "Stop voice dictation" : "Start voice dictation"}
               >
-                {isRecording ? <MicOff size={14} strokeWidth={2.5} /> : <Mic size={14} strokeWidth={2.5} />}
+                {isRecording ? <MicOff size={15} strokeWidth={2.5} /> : <Mic size={15} strokeWidth={2.5} />}
               </button>
             )}
 
