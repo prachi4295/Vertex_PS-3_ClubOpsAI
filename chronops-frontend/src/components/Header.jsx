@@ -31,6 +31,7 @@ import { useSessions } from "../hooks/useSessions";
 import { INITIAL_EVENTS } from "../data/multiEvents";
 
 export default function Header() {
+  const { mode, setMode, goLive, searchQuery, setSearchQuery } = useApp();
   const {
     notifications,
     markAllRead,
