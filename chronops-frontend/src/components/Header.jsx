@@ -72,13 +72,11 @@ export default function Header() {
             title="Go to ChronOps Home"
             aria-label="ChronOps Home"
           >
-            <div className="bg-neo-white border-3 border-neo-ink px-2.5 py-1 shadow-neo-sm hover:shadow-neo transition-all active:translate-x-[1px] active:translate-y-[1px] flex items-center">
-              <img
-                src="/chronops-logo.png"
-                alt="ChronOps"
-                className="h-6 sm:h-7 w-auto object-contain"
-              />
-            </div>
+            <img
+              src="/chronops-dark-logo.png"
+              alt="ChronOps"
+              className="h-8 sm:h-9 w-auto object-contain transition-transform group-hover:scale-105 active:scale-95"
+            />
           </button>
 
           {/* ─── Mode tabs ─── */}
