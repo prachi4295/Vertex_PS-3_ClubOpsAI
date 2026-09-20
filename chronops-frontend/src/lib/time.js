@@ -83,6 +83,142 @@ export function formatTimeRange(startTime, durationMinutes) {
 }
 
 /**
+ * Formats duration in minutes to human-readable format.
+ * E.g., 70 -> "1hr 10 min", 80 -> "1hr 20 min", 60 -> "1hr", 45 -> "45 min"
+ *
+ * @param {number|string} durationMinutes
+ * @returns {string}
+ */
+export function formatDuration(durationMinutes) {
+  const mins = Number(durationMinutes);
+  if (!mins || isNaN(mins) || mins <= 0) return "0 min";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h > 0 && m > 0) {
+    return `${h}hr ${m} min`;
+  }
+  if (h > 0) {
+    return `${h}hr`;
+  }
+  return `${m} min`;
+}
+
+/**
+ * Formats a date string or Date instance into DD-MM-YYYY format.
+ * E.g. "2026-09-20" -> "20-09-2026"
+ *
+ * @param {string|Date} dateVal
+ * @returns {string} formatted as "DD-MM-YYYY"
+ */
+export function formatDateDMY(dateVal) {
+  if (!dateVal) return "";
+  const str = dateVal instanceof Date ? dateVal.toISOString().split("T")[0] : String(dateVal).trim();
+  const clean = str.split("T")[0];
+  const parts = clean.split("-");
+  if (parts.length === 3 && parts[0].length === 4) {
+    const [y, m, d] = parts;
+    return `${d.padStart(2, "0")}-${m.padStart(2, "0")}-${y}`;
+  }
+  return str;
+}
+
+/**
+ * Formats a 24-hour "HH:mm" time string into 12-hour "hh:mm AM/PM" format.
+ * E.g. "11:30" -> "11:30 AM", "14:45" -> "02:45 PM", "00:15" -> "12:15 AM"
+ *
+ * @param {string} timeStr - "HH:mm" or time string
+ * @returns {string} e.g. "11:30 AM"
+ */
+export function formatTime12(timeStr) {
+  if (!timeStr || typeof timeStr !== "string") return "";
+  const trimmed = timeStr.trim();
+  if (/am|pm/i.test(trimmed)) return trimmed;
+
+  const parts = trimmed.split(":");
+  if (parts.length < 2) return trimmed;
+
+  const hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
+  if (isNaN(hours) || isNaN(minutes)) return trimmed;
+
+  const period = hours >= 12 ? "PM" : "AM";
+  const hours12 = hours % 12 === 0 ? 12 : hours % 12;
+  const hoursStr = String(hours12).padStart(2, "0");
+  const minsStr = String(minutes).padStart(2, "0");
+
+  return `${hoursStr}:${minsStr} ${period}`;
+}
+
+/**
+ * Parses any time string (12-hour or 24-hour) into { hour12, minute, period }.
+ * E.g. "14:30" -> { hour12: "02", minute: "30", period: "PM" }
+ * E.g. "09:00" -> { hour12: "09", minute: "00", period: "AM" }
+ *
+ * @param {string} timeStr
+ * @returns {{ hour12: string, minute: string, period: "AM"|"PM" }}
+ */
+export function splitTime12(timeStr) {
+  if (!timeStr || typeof timeStr !== "string") {
+    return { hour12: "09", minute: "00", period: "AM" };
+  }
+
+  const trimmed = timeStr.trim();
+  const match12 = trimmed.match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i);
+  if (match12) {
+    let h = parseInt(match12[1], 10);
+    h = Math.min(12, Math.max(1, h));
+    return {
+      hour12: String(h).padStart(2, "0"),
+      minute: match12[2],
+      period: match12[3].toUpperCase(),
+    };
+  }
+
+  const parts = trimmed.split(":");
+  if (parts.length >= 2) {
+    let h24 = parseInt(parts[0], 10);
+    let m = parseInt(parts[1], 10);
+    if (isNaN(h24)) h24 = 9;
+    if (isNaN(m)) m = 0;
+    const period = h24 >= 12 ? "PM" : "AM";
+    const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    return {
+      hour12: String(h12).padStart(2, "0"),
+      minute: String(m).padStart(2, "0"),
+      period,
+    };
+  }
+
+  return { hour12: "09", minute: "00", period: "AM" };
+}
+
+/**
+ * Combines 12-hour components into a 24-hour "HH:mm" string for storage and comparison.
+ * E.g. ("02", "30", "PM") -> "14:30", ("12", "00", "AM") -> "00:00"
+ *
+ * @param {number|string} hour12
+ * @param {number|string} minute
+ * @param {"AM"|"PM"} period
+ * @returns {string} "HH:mm"
+ */
+export function joinTime24(hour12, minute, period = "AM") {
+  let h = parseInt(hour12, 10);
+  let m = parseInt(minute, 10);
+  if (isNaN(h)) h = 9;
+  if (isNaN(m)) m = 0;
+
+  h = Math.min(12, Math.max(1, h));
+  m = Math.min(59, Math.max(0, m));
+
+  const isPM = String(period).toUpperCase() === "PM";
+  let h24 = h;
+  if (isPM && h < 12) h24 = h + 12;
+  if (!isPM && h === 12) h24 = 0;
+
+  return `${String(h24).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/**
  * Detects overlapping or clashing sessions in a schedule.
  * Returns an array of clash objects detailing which sessions overlap and by how many minutes.
  *

@@ -10,6 +10,7 @@ import EventTaskboardPage from "./pages/EventTaskboardPage";
 import Login from "./pages/Login";
 import StyleGuide from "./pages/StyleGuide";
 import ErrorBoundary from "./components/ErrorBoundary";
+import EventAutoStartWatcher from "./components/EventAutoStartWatcher";
 import { Star } from "lucide-react";
 
 /**
@@ -63,6 +64,7 @@ export default function App() {
             <TasksProvider>
               <SessionsProvider>
                 <ClockProvider>
+                  <EventAutoStartWatcher />
                   <Routes>
                     <Route
                       path="/"

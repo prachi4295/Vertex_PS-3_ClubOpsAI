@@ -18,7 +18,7 @@ import KanbanBoard from "../components/KanbanBoard";
 import EditEventModal from "../components/EditEventModal";
 import { Badge, Modal } from "../components/ui";
 import Button from "../components/ui/Button";
-import { INITIAL_EVENTS } from "../data/multiEvents";
+import { INITIAL_EVENTS, getEventTheme } from "../data/multiEvents";
 import { useTasks } from "../hooks/useTasks";
 import { useApp } from "../hooks/useApp";
 import {
@@ -27,6 +27,7 @@ import {
   removeStoredTasks,
   removeStoredSessions,
 } from "../lib/storage";
+import { formatDateDMY, formatTime12 } from "../lib/time";
 
 /**
  * Dedicated webpage for an event's full taskboard.
@@ -139,26 +140,45 @@ export default function EventTaskboardPage() {
             <span className="text-xs font-black text-neo-ink/50 uppercase tracking-widest hidden sm:inline-block">
               Directory / {event.name}
             </span>
-            <Badge color="accent" rotate className="!text-[10px] !px-2.5 !py-0.5">
-              Live Board
-            </Badge>
           </div>
         </div>
 
         {/* ─── Event Header Banner ─── */}
-        <div className="bg-neo-white border-4 border-neo-ink p-5 sm:p-6 shadow-neo flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div className="bg-neo-white border-4 border-neo-ink p-5 sm:p-6 shadow-neo flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
+          {/* Top Theme Accent Stripe */}
+          <div
+            className="absolute top-0 left-0 right-0 h-2"
+            style={{ backgroundColor: getEventTheme(event.themeColor || event.color).hex }}
+          />
           <div className="space-y-2 flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                color={event.id === "chronops-summit-2026" ? "accent" : "secondary"}
-                className="!text-xs !px-3 !py-0.5 font-black uppercase !border-2"
+              <span
+                className="text-xs px-3 py-0.5 font-black uppercase border-2 border-neo-ink shadow-[1px_1px_0_#000] text-neo-ink"
+                style={{ backgroundColor: getEventTheme(event.themeColor || event.color).hex }}
               >
                 {event.category}
-              </Badge>
+              </span>
+
+              {/* Status pill: Live Now vs Upcoming vs Completed */}
+              {event.status === "active" ? (
+                <span className="inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 font-black uppercase bg-emerald-300 border-2 border-neo-ink shadow-[1px_1px_0_#000] text-neo-ink animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-800 animate-ping" />
+                  Live Now
+                </span>
+              ) : event.status === "completed" ? (
+                <span className="text-[10px] px-2.5 py-0.5 font-black uppercase bg-slate-200 border-2 border-neo-ink text-slate-700 shadow-[1px_1px_0_#000]">
+                  Completed
+                </span>
+              ) : (
+                <span className="text-[10px] px-2.5 py-0.5 font-black uppercase bg-neo-bg border-2 border-neo-ink text-neo-ink/70 shadow-[1px_1px_0_#000]">
+                  Upcoming
+                </span>
+              )}
 
               <span className="flex items-center gap-1.5 text-xs font-bold text-neo-ink/80 uppercase">
                 <Calendar size={14} strokeWidth={3} />
-                {event.date}
+                {formatDateDMY(event.date)}
+                {event.time ? ` • ${formatTime12(event.time)}` : ""}
               </span>
 
               {event.location && (
@@ -195,8 +215,11 @@ export default function EventTaskboardPage() {
               </div>
               <div className="w-full h-3.5 bg-neo-white border-2 border-neo-ink p-0.5 shadow-[2px_2px_0_#000]">
                 <div
-                  className="h-full bg-neo-accent border border-neo-ink transition-all duration-300"
-                  style={{ width: `${stats.completionRate}%` }}
+                  className="h-full border border-neo-ink transition-all duration-300"
+                  style={{
+                    width: `${stats.completionRate}%`,
+                    backgroundColor: getEventTheme(event.themeColor || event.color).hex,
+                  }}
                 />
               </div>
             </div>
@@ -233,7 +256,7 @@ export default function EventTaskboardPage() {
         <div className="pb-8">
           <KanbanBoard
             eventId={eventId}
-            eventTitle={`${event.name} — Kanban Board`}
+            eventTitle="Kanban Board"
           />
         </div>
       </main>

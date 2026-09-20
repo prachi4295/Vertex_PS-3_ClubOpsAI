@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 
 const COLUMNS = [
-  { key: "backlog", label: "Backlog", color: "bg-neo-muted" },
-  { key: "todo", label: "To Do", color: "bg-neo-white" },
-  { key: "in_progress", label: "In Progress", color: "bg-neo-secondary" },
+  { key: "backlog", label: "Backlog", color: "bg-[#CBD5E1]" },
+  { key: "todo", label: "To Do", color: "bg-[#BFDBFE]" },
+  { key: "in_progress", label: "In Progress", color: "bg-[#FED7AA]" },
   { key: "done", label: "Done", color: "bg-neo-ink", textColor: "text-neo-white" },
 ];
 
@@ -12,9 +12,9 @@ const STATUS_ORDER = ["backlog", "todo", "in_progress", "done"];
 describe("Kanban Board Configuration and Mechanics", () => {
   it("matches context specification for four column header colors", () => {
     expect(COLUMNS).toHaveLength(4);
-    expect(COLUMNS[0].color).toBe("bg-neo-muted");
-    expect(COLUMNS[1].color).toBe("bg-neo-white");
-    expect(COLUMNS[2].color).toBe("bg-neo-secondary");
+    expect(COLUMNS[0].color).toBe("bg-[#CBD5E1]");
+    expect(COLUMNS[1].color).toBe("bg-[#BFDBFE]");
+    expect(COLUMNS[2].color).toBe("bg-[#FED7AA]");
     expect(COLUMNS[3].color).toBe("bg-neo-ink");
     expect(COLUMNS[3].textColor).toBe("text-neo-white");
   });

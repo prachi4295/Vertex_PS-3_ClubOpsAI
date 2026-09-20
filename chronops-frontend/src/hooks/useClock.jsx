@@ -20,7 +20,7 @@ export function ClockProvider({ children, initialTime = null }) {
 
   // Update speed smoothly without time jumps
   const setSpeed = useCallback((newSpeed) => {
-    const validSpeed = Math.max(1, Math.min(120, Number(newSpeed) || 1));
+    const validSpeed = Math.max(1, Math.min(30, Number(newSpeed) || 1));
     const nowReal = Date.now();
 
     if (!isPausedRef.current) {

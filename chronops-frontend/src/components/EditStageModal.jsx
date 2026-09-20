@@ -19,6 +19,7 @@ import { useSessions } from "../hooks/useSessions";
 import { useNotifications } from "../hooks/useNotifications";
 import { generatePhoneticGuide } from "../services/gemini";
 import { INITIAL_EVENTS } from "../data/multiEvents";
+import { formatDuration } from "../lib/time";
 import { getStoredEvents } from "../lib/storage";
 
 /**
@@ -476,10 +477,10 @@ export default function EditStageModal({ open, onClose, eventId }) {
                 </div>
 
                 {/* Time & Type Badge */}
-                <div className="w-16 shrink-0 text-center">
+                <div className="shrink-0 text-center px-1 min-w-[4.5rem]">
                   <div className="font-black text-xs text-neo-ink">{session.startTime}</div>
-                  <div className="text-[9px] font-bold text-neo-ink/50 uppercase">
-                    {session.durationMinutes}m
+                  <div className="text-[9px] font-bold text-neo-ink/70 uppercase whitespace-nowrap">
+                    {formatDuration(session.durationMinutes)}
                   </div>
                 </div>
 

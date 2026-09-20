@@ -13,7 +13,7 @@ import { useApp } from "../hooks/useApp";
 import { useSessions } from "../hooks/useSessions";
 import { useNotifications } from "../hooks/useNotifications";
 import { reflowSchedule } from "../lib/reflow";
-import { formatTimeRange } from "../lib/time";
+import { formatTimeRange, formatDuration } from "../lib/time";
 
 const statusConfig = {
   completed: {
@@ -317,7 +317,7 @@ export default function LiveFlowPreview({ eventId }) {
               )}
               <div className="text-[10px] font-black text-neo-ink/60 uppercase mt-1 flex items-center gap-2">
                 <span>⏱️ {formatTimeRange(liveSession.startTime, liveSession.durationMinutes)}</span>
-                <span>({liveSession.durationMinutes}m)</span>
+                <span>({formatDuration(liveSession.durationMinutes)})</span>
               </div>
             </div>
 

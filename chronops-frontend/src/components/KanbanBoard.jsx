@@ -23,9 +23,9 @@ import { useTasks } from "../hooks/useTasks";
 import { useNotifications } from "../hooks/useNotifications";
 
 const COLUMNS = [
-  { key: "backlog", label: "Backlog", color: "bg-neo-muted" },
-  { key: "todo", label: "To Do", color: "bg-neo-white" },
-  { key: "in_progress", label: "In Progress", color: "bg-neo-secondary" },
+  { key: "backlog", label: "Backlog", color: "bg-[#CBD5E1]" },
+  { key: "todo", label: "To Do", color: "bg-[#BFDBFE]" },
+  { key: "in_progress", label: "In Progress", color: "bg-[#FED7AA]" },
   {
     key: "done",
     label: "Done",
@@ -41,7 +41,7 @@ const COLUMNS = [
  */
 export default function KanbanBoard({
   eventId,
-  eventTitle = "Task Board",
+  eventTitle = "Kanban Board",
   onCollapse,
 }) {
   const { searchQuery } = useApp();
@@ -185,7 +185,7 @@ export default function KanbanBoard({
         headerContent={
           <span className="flex items-center gap-2">
             <Columns3 size={16} strokeWidth={3} />
-            Task Board
+            Kanban Board
           </span>
         }
         headerColor="bg-neo-white"
@@ -231,7 +231,7 @@ export default function KanbanBoard({
         headerContent={
           <span className="flex items-center gap-2">
             <Columns3 size={16} strokeWidth={3} />
-            Task Board
+            Kanban Board
           </span>
         }
         headerColor="bg-neo-white"

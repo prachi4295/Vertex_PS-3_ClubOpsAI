@@ -7,6 +7,9 @@ import {
   signInAnonymously,
   signOut,
   onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
 } from "firebase/auth";
 
 const firebaseConfig = {
@@ -54,4 +57,7 @@ export {
   signInAnonymously,
   signOut,
   onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
 };

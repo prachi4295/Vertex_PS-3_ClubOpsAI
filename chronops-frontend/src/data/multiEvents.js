@@ -8,6 +8,35 @@ export const DEMO_EVENT_IDS = [
   "club-orientation-2026",
 ];
 
+export const EVENT_THEME_OPTIONS = [
+  { id: "amber", name: "Warm Gold", hex: "#FDE68A", bgClass: "bg-[#FDE68A]", borderClass: "border-[#FDE68A]" },
+  { id: "coral", name: "Coral Flame", hex: "#E26D5C", bgClass: "bg-[#E26D5C]", borderClass: "border-[#E26D5C]" },
+  { id: "cyan", name: "Electric Cyan", hex: "#7DD3FC", bgClass: "bg-[#7DD3FC]", borderClass: "border-[#7DD3FC]" },
+  { id: "lime", name: "Neon Lime", hex: "#86EFAC", bgClass: "bg-[#86EFAC]", borderClass: "border-[#86EFAC]" },
+  { id: "purple", name: "Cyber Purple", hex: "#DDD6FE", bgClass: "bg-[#DDD6FE]", borderClass: "border-[#DDD6FE]" },
+  { id: "rose", name: "Neo Rose", hex: "#FBCFE8", bgClass: "bg-[#FBCFE8]", borderClass: "border-[#FBCFE8]" },
+];
+
+export function getEventTheme(themeColorOrId) {
+  if (!themeColorOrId) return EVENT_THEME_OPTIONS[0];
+  const found = EVENT_THEME_OPTIONS.find(
+    (c) =>
+      c.id === themeColorOrId ||
+      c.hex.toLowerCase() === String(themeColorOrId).toLowerCase()
+  );
+  if (found) return found;
+  if (typeof themeColorOrId === "string" && themeColorOrId.startsWith("#")) {
+    return {
+      id: "custom",
+      name: "Custom",
+      hex: themeColorOrId,
+      bgClass: "",
+      borderClass: "",
+    };
+  }
+  return EVENT_THEME_OPTIONS[0];
+}
+
 export const INITIAL_EVENTS = [];
 
 export const AI_SUMMIT_TASKS = [

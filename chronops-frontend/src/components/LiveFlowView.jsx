@@ -4,7 +4,7 @@ import { Badge } from "./ui";
 import { useApp } from "../hooks/useApp";
 import { useSessions } from "../hooks/useSessions";
 import { useNotifications } from "../hooks/useNotifications";
-import { formatTimeRange, detectTimingClashes, resolveTimingClashes } from "../lib/time";
+import { formatTimeRange, formatDuration, detectTimingClashes, resolveTimingClashes } from "../lib/time";
 import { INITIAL_EVENTS } from "../data/multiEvents";
 
 import {
@@ -74,7 +74,7 @@ export default function LiveFlowView({ eventId }) {
     if (!autoReflow) {
       await updateSession(session.id, { durationMinutes: newDuration });
       addNotification({
-        message: `Extended "${session.title}" by +${mins}m (Duration: ${newDuration}m).`,
+        message: `Extended "${session.title}" by +${mins}m (Duration: ${formatDuration(newDuration)}).`,
         type: "action",
       });
       return;
@@ -266,7 +266,7 @@ export default function LiveFlowView({ eventId }) {
                     <p className="text-xs font-semibold text-neo-ink/70 flex items-center gap-1.5 pt-0.5">
                       <Clock size={13} strokeWidth={2.5} />
                       {formatTimeRange(session.startTime, session.durationMinutes).replace(" - ", " – ")}
-                      {session.durationMinutes ? ` (${session.durationMinutes}M)` : ""}
+                      {session.durationMinutes ? ` (${formatDuration(session.durationMinutes)})` : ""}
                     </p>
                   </div>
 

@@ -27,7 +27,7 @@ import { useSessions } from "../hooks/useSessions";
 import { useNotifications } from "../hooks/useNotifications";
 import { useClock, formatClockTime, formatCountdown } from "../hooks/useClock";
 import { reflowSchedule } from "../lib/reflow";
-import { formatTimeRange } from "../lib/time";
+import { formatTimeRange, formatDuration } from "../lib/time";
 import {
   generateSpeakerIntro,
   generateTransition,
@@ -103,6 +103,13 @@ export default function LiveStageView({ initialEventId }) {
     togglePause,
     resetClock,
   } = useClock();
+
+  // Clamp speed to 30x if previously higher
+  useEffect(() => {
+    if (speed > 30) {
+      setSpeed(30);
+    }
+  }, [speed, setSpeed]);
 
   // Drawers and modals
   const [demoDrawerOpen, setDemoDrawerOpen] = useState(false);
@@ -401,13 +408,13 @@ export default function LiveStageView({ initialEventId }) {
             LIVE STAGE MONITOR
           </span>
 
-          {/* Event Selector Dropdown */}
-          <div className="flex items-center gap-1.5 bg-neo-white border-2 border-neo-ink px-2 py-0.5 shadow-[2px_2px_0_#000]">
-            <span className="text-[10px] font-black uppercase text-neo-ink/70">EVENT:</span>
+          {/* Event Selector Dropdown - Bigger & Bolder */}
+          <div className="flex items-center gap-2 bg-neo-white border-3 border-neo-ink px-3 py-1.5 shadow-[3px_3px_0_#000]">
+            <span className="text-xs font-black uppercase tracking-wider text-neo-ink/80">EVENT:</span>
             <select
               value={selectedEventId}
               onChange={(e) => setSelectedEventId(e.target.value)}
-              className="font-black text-xs bg-transparent border-none outline-none cursor-pointer text-neo-ink pr-1"
+              className="font-black text-sm bg-transparent border-none outline-none cursor-pointer text-neo-ink pr-2"
             >
               {events.map((ev) => (
                 <option key={ev.id} value={ev.id} className="font-bold">
@@ -421,10 +428,10 @@ export default function LiveStageView({ initialEventId }) {
           <button
             type="button"
             onClick={() => setConfigureModalOpen(true)}
-            className="min-h-[30px] px-2.5 bg-neo-accent border-2 border-neo-ink font-black text-xs uppercase flex items-center gap-1.5 shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer hover:bg-neo-accent/90"
+            className="min-h-[36px] px-3 bg-neo-accent border-2 border-neo-ink font-black text-xs uppercase flex items-center gap-1.5 shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer hover:bg-neo-accent/90"
             title="Configure sessions with AI for this event"
           >
-            <Sparkles size={13} strokeWidth={3} />
+            <Sparkles size={14} strokeWidth={3} />
             <span className="hidden sm:inline">Configure with AI</span>
             <span className="sm:hidden">AI Config</span>
           </button>
@@ -434,30 +441,22 @@ export default function LiveStageView({ initialEventId }) {
             type="button"
             onClick={() => setAutoTimeSync((prev) => !prev)}
             className={[
-              "min-h-[30px] px-2 border-2 border-neo-ink font-black text-[10px] uppercase flex items-center gap-1 shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer",
+              "min-h-[36px] px-2.5 border-2 border-neo-ink font-black text-[11px] uppercase flex items-center gap-1.5 shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer",
               autoTimeSync ? "bg-neo-white text-green-700" : "bg-neo-white/60 text-neo-ink/50",
             ].join(" ")}
             title="Auto-sync live stage transitions with event schedule time"
           >
-            <Clock size={12} strokeWidth={3} />
+            <Clock size={13} strokeWidth={3} />
             <span>Time-Sync: {autoTimeSync ? "ON" : "OFF"}</span>
           </button>
         </div>
 
-        {/* Clock speed readout & drawer trigger */}
+        {/* Live Clock readout */}
         <div className="flex items-center gap-2">
-          <span className="font-mono font-bold text-xs bg-neo-white border-2 border-neo-ink px-2 py-1 shadow-[1px_1px_0_#000]">
+          <span className="font-mono font-black text-sm bg-neo-white border-3 border-neo-ink px-3 py-1.5 shadow-[2px_2px_0_#000] flex items-center gap-1.5">
+            <Clock size={14} strokeWidth={3} className="text-neo-ink/70" />
             {formatClockTime(currentTime)}
           </span>
-          <button
-            type="button"
-            onClick={() => setDemoDrawerOpen(true)}
-            aria-label="Open demo controls"
-            className="min-h-[44px] px-3 bg-neo-secondary border-2 border-neo-ink font-black text-xs uppercase flex items-center gap-1.5 shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer hover:bg-neo-secondary/80"
-          >
-            <Sliders size={14} strokeWidth={3} />
-            <span>{speed}x</span>
-          </button>
         </div>
       </div>
 
@@ -548,7 +547,7 @@ export default function LiveStageView({ initialEventId }) {
             </div>
 
             <div className="flex items-center justify-center gap-3 text-xs font-bold mt-2 uppercase tracking-wide">
-              <span>Planned: {liveSession.durationMinutes}m</span>
+              <span>Planned: {formatDuration(liveSession.durationMinutes)}</span>
               <span>•</span>
               <span>Window: {formatTimeRange(liveSession.startTime, liveSession.durationMinutes)}</span>
             </div>
@@ -974,9 +973,9 @@ export default function LiveStageView({ initialEventId }) {
                   </span>
                 </div>
 
-                {/* Preset Speed Buttons: 1x, 30x, 60x */}
-                <div className="grid grid-cols-3 gap-2">
-                  {[1, 30, 60].map((s) => (
+                {/* Preset Speed Buttons: 1x, 30x */}
+                <div className="grid grid-cols-2 gap-2">
+                  {[1, 30].map((s) => (
                     <button
                       key={s}
                       type="button"
@@ -996,13 +995,13 @@ export default function LiveStageView({ initialEventId }) {
                 {/* Speed Slider */}
                 <div>
                   <label className="block text-[10px] font-black uppercase text-neo-ink/60 mb-1">
-                    Continuous Multiplier (1x - 60x)
+                    Continuous Multiplier (1x - 30x)
                   </label>
                   <input
                     type="range"
                     min="1"
-                    max="60"
-                    value={speed}
+                    max="30"
+                    value={Math.min(speed, 30)}
                     onChange={(e) => setSpeed(Number(e.target.value))}
                     className="w-full accent-neo-accent cursor-pointer"
                   />
@@ -1019,7 +1018,7 @@ export default function LiveStageView({ initialEventId }) {
               </div>
 
               <div className="p-3 bg-neo-secondary/30 border-2 border-neo-ink text-[11px] font-bold text-neo-ink leading-snug">
-                💡 <span className="font-black">Demo Tip:</span> Set speed to <strong>30x or 60x</strong> to watch the live countdown hit zero and turn red as an overrun in just a few seconds!
+                💡 <span className="font-black">Demo Tip:</span> Set speed to <strong>30x</strong> to watch the live countdown hit zero and turn red as an overrun in just a few seconds!
               </div>
             </div>
 

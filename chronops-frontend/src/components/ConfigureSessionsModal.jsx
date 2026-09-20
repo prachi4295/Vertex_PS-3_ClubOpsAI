@@ -15,6 +15,7 @@ import Button from "./ui/Button";
 import { configureSessionsWithAI } from "../services/gemini";
 import { setSessionsBatchForEvent } from "../hooks/useSessions";
 import { useNotifications } from "../hooks/useNotifications";
+import { formatDuration } from "../lib/time";
 import { INITIAL_EVENTS } from "../data/multiEvents";
 
 import { getStoredEvents } from "../lib/storage";
@@ -240,7 +241,7 @@ export default function ConfigureSessionsModal({
                         {s.startTime}
                       </span>
                       <Badge color={s.sessionType === "fixed" ? "accent" : "muted"} className="!text-[9px]">
-                        {s.durationMinutes}m • {s.sessionType}
+                        {formatDuration(s.durationMinutes)} • {s.sessionType}
                       </Badge>
                       {s.phoneticGuide && (
                         <span className="text-[10px] font-bold text-neo-ink/60 italic">

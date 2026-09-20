@@ -8,3 +8,4 @@ export { default as Toast } from "./Toast";
 export { default as IconBox } from "./IconBox";
 export { default as Gauge } from "./Gauge";
 export { default as Dropdown } from "./Dropdown";
+export { default as TimeInput12 } from "./TimeInput12";

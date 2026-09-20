@@ -6,6 +6,11 @@ import {
   diffMinutes,
   calculateDelayMinutes,
   formatTimeRange,
+  formatDuration,
+  formatDateDMY,
+  formatTime12,
+  splitTime12,
+  joinTime24,
   detectTimingClashes,
   resolveTimingClashes,
 } from "./time";
@@ -71,6 +76,63 @@ describe("Time Utility Module (time.js)", () => {
     });
   });
 
+  describe("formatDuration", () => {
+    it("formats 70m to 1hr 10 min and 80m to 1hr 20 min", () => {
+      expect(formatDuration(70)).toBe("1hr 10 min");
+      expect(formatDuration(80)).toBe("1hr 20 min");
+    });
+
+    it("formats exact hours correctly", () => {
+      expect(formatDuration(60)).toBe("1hr");
+      expect(formatDuration(120)).toBe("2hr");
+    });
+
+    it("formats minutes under 1 hour correctly", () => {
+      expect(formatDuration(30)).toBe("30 min");
+      expect(formatDuration(45)).toBe("45 min");
+      expect(formatDuration(5)).toBe("5 min");
+    });
+
+    it("handles invalid or zero minutes gracefully", () => {
+      expect(formatDuration(0)).toBe("0 min");
+      expect(formatDuration(null)).toBe("0 min");
+      expect(formatDuration(undefined)).toBe("0 min");
+    });
+  });
+
+  describe("formatTime12, splitTime12, joinTime24 (12h AM/PM)", () => {
+    it("formatTime12 formats 24h strings into 12-hour AM/PM", () => {
+      expect(formatTime12("11:30")).toBe("11:30 AM");
+      expect(formatTime12("14:45")).toBe("02:45 PM");
+      expect(formatTime12("00:15")).toBe("12:15 AM");
+      expect(formatTime12("12:00")).toBe("12:00 PM");
+      expect(formatTime12("23:59")).toBe("11:59 PM");
+      expect(formatTime12("09:05")).toBe("09:05 AM");
+      expect(formatTime12("11:30 AM")).toBe("11:30 AM");
+      expect(formatTime12("")).toBe("");
+      expect(formatTime12(null)).toBe("");
+    });
+
+    it("splitTime12 correctly breaks down 24h and 12h strings", () => {
+      expect(splitTime12("14:30")).toEqual({ hour12: "02", minute: "30", period: "PM" });
+      expect(splitTime12("09:15")).toEqual({ hour12: "09", minute: "15", period: "AM" });
+      expect(splitTime12("00:00")).toEqual({ hour12: "12", minute: "00", period: "AM" });
+      expect(splitTime12("12:00")).toEqual({ hour12: "12", minute: "00", period: "PM" });
+      expect(splitTime12("11:45 PM")).toEqual({ hour12: "11", minute: "45", period: "PM" });
+      expect(splitTime12("07:20 AM")).toEqual({ hour12: "07", minute: "20", period: "AM" });
+      expect(splitTime12("")).toEqual({ hour12: "09", minute: "00", period: "AM" });
+    });
+
+    it("joinTime24 accurately generates 24h strings", () => {
+      expect(joinTime24("11", "30", "AM")).toBe("11:30");
+      expect(joinTime24("02", "30", "PM")).toBe("14:30");
+      expect(joinTime24("12", "00", "AM")).toBe("00:00");
+      expect(joinTime24("12", "00", "PM")).toBe("12:00");
+      expect(joinTime24("11", "59", "PM")).toBe("23:59");
+      expect(joinTime24("1", "5", "AM")).toBe("01:05");
+    });
+  });
+
   describe("detectTimingClashes & resolveTimingClashes", () => {
     const sampleSessions = [
       {
@@ -117,6 +179,30 @@ describe("Time Utility Module (time.js)", () => {
       // Verify no clashes remain
       const remainingClashes = detectTimingClashes(resolved);
       expect(remainingClashes).toHaveLength(0);
+    });
+  });
+
+  describe("formatDateDMY", () => {
+    it("formats YYYY-MM-DD to DD-MM-YYYY", () => {
+      expect(formatDateDMY("2026-09-20")).toBe("20-09-2026");
+      expect(formatDateDMY("2025-01-05")).toBe("05-01-2025");
+      expect(formatDateDMY("2024-12-31")).toBe("31-12-2024");
+    });
+
+    it("handles ISO timestamps", () => {
+      expect(formatDateDMY("2026-09-20T14:30:00.000Z")).toBe("20-09-2026");
+    });
+
+    it("handles Date objects", () => {
+      const d = new Date("2026-09-20T00:00:00.000Z");
+      expect(formatDateDMY(d)).toBe("20-09-2026");
+    });
+
+    it("returns original or empty for non-standard or missing inputs", () => {
+      expect(formatDateDMY("")).toBe("");
+      expect(formatDateDMY(null)).toBe("");
+      expect(formatDateDMY(undefined)).toBe("");
+      expect(formatDateDMY("20-09-2026")).toBe("20-09-2026");
     });
   });
 });

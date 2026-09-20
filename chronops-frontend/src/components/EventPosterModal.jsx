@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Modal, Badge } from "./ui";
 import Button from "./ui/Button";
+import { formatDateDMY } from "../lib/time";
 
 const POSTER_THEMES = [
   { id: "clean-mono", name: "Clean Minimal", bg: "bg-[#F8FAFC]", text: "text-slate-900", accent: "bg-[#0F172A] text-white" },
@@ -51,7 +52,7 @@ export default function EventPosterModal({ open, onClose, event }) {
     if (!event) return;
     const text = `📢 ${event.name.toUpperCase()}
 🏷️ Category: ${event.category || "Hackathon"}
-📅 Date: ${event.date}
+📅 Date: ${formatDateDMY(event.date)}
 📍 Venue: ${event.location}
 ✨ ${event.tagline || "Join us for an extraordinary day of innovation & live tech!"}
 👉 Register and join the live stage run-sheet on ChronOps!`;
@@ -79,7 +80,7 @@ export default function EventPosterModal({ open, onClose, event }) {
   <text x="400" y="440" fill="#FF6B6B" font-family="Space Grotesk, sans-serif" font-size="28" font-weight="700" text-anchor="middle">${event.tagline || "INNOVATION & LIVE STAGE SUMMIT"}</text>
   <rect x="50" y="630" width="330" height="200" fill="#FF6B6B" stroke="#000" stroke-width="8"/>
   <text x="80" y="700" fill="#000" font-family="Space Grotesk, sans-serif" font-size="24" font-weight="900">DATE</text>
-  <text x="80" y="770" fill="#000" font-family="Space Grotesk, sans-serif" font-size="34" font-weight="900">${event.date}</text>
+  <text x="80" y="770" fill="#000" font-family="Space Grotesk, sans-serif" font-size="34" font-weight="900">${formatDateDMY(event.date)}</text>
   <rect x="420" y="630" width="330" height="200" fill="#C4B5FD" stroke="#000" stroke-width="8"/>
   <text x="450" y="700" fill="#000" font-family="Space Grotesk, sans-serif" font-size="24" font-weight="900">VENUE</text>
   <text x="450" y="760" fill="#000" font-family="Space Grotesk, sans-serif" font-size="24" font-weight="900">${event.location.slice(0, 20)}</text>
@@ -193,7 +194,7 @@ export default function EventPosterModal({ open, onClose, event }) {
                       SCHEDULE DATE
                     </span>
                     <span className="text-sm font-black text-neo-ink uppercase">
-                      {event.date}
+                      {formatDateDMY(event.date)}
                     </span>
                   </div>
                 </div>

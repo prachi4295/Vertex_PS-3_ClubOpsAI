@@ -13,13 +13,14 @@ import {
   AlertTriangle,
   Edit3,
   UploadCloud,
+  Check,
 } from "lucide-react";
-import { Badge, Modal, Input } from "./ui";
+import { Badge, Modal, Input, TimeInput12 } from "./ui";
 import Button from "./ui/Button";
 import EditEventModal from "./EditEventModal";
 import UploadDocumentModal from "./UploadDocumentModal";
 import EventPosterModal from "./EventPosterModal";
-import { INITIAL_EVENTS } from "../data/multiEvents";
+import { INITIAL_EVENTS, EVENT_THEME_OPTIONS, getEventTheme } from "../data/multiEvents";
 import { useTasks } from "../hooks/useTasks";
 import { useApp } from "../hooks/useApp";
 import {
@@ -29,6 +30,8 @@ import {
   removeStoredSessions,
   getActiveUserEmail,
 } from "../lib/storage";
+import { formatDateDMY, formatTime12 } from "../lib/time";
+import { isEventDue } from "../lib/eventScheduler";
 
 const DEMO_EVENT_IDS = ["chronops-summit-2026", "ai-summit-2026", "club-orientation-2026"];
 
@@ -52,7 +55,9 @@ export default function EventTaskboardsManager() {
     category: "Hackathon",
     tagline: "",
     date: new Date().toISOString().split("T")[0],
+    time: "09:00",
     location: "Campus Auditorium",
+    themeColor: "amber",
   });
   const [customNewCategory, setCustomNewCategory] = useState("");
   const [formErrors, setFormErrors] = useState({});
@@ -115,6 +120,11 @@ export default function EventTaskboardsManager() {
         ? customNewCategory.trim() || "Other"
         : newEventForm.category;
 
+    const initialDue = isEventDue({
+      date: newEventForm.date,
+      time: newEventForm.time || "09:00",
+    });
+
     const created = {
       id: newId,
       ownerEmail: getActiveUserEmail(),
@@ -124,9 +134,11 @@ export default function EventTaskboardsManager() {
         newEventForm.tagline.trim() ||
         "Dynamic Event Taskboard & Live Stage",
       date: newEventForm.date,
-      status: "active",
+      time: newEventForm.time || "09:00",
+      status: initialDue ? "active" : "upcoming",
       location: newEventForm.location.trim() || "Campus Venue",
-      color: "accent",
+      themeColor: newEventForm.themeColor || "amber",
+      color: newEventForm.themeColor || "amber",
     };
 
     const updated = [created, ...events];
@@ -137,7 +149,9 @@ export default function EventTaskboardsManager() {
       category: "Hackathon",
       tagline: "",
       date: new Date().toISOString().split("T")[0],
+      time: "09:00",
       location: "Campus Auditorium",
+      themeColor: "amber",
     });
     setFormErrors({});
     // Navigate straight to the new event's dedicated webpage!
@@ -280,24 +294,42 @@ export default function EventTaskboardsManager() {
               )}
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-neo-ink mb-1">
-                Event Date *
-              </label>
-              <Input
-                type="date"
-                value={newEventForm.date}
-                onChange={(e) =>
-                  setNewEventForm((prev) => ({ ...prev, date: e.target.value }))
-                }
-                className="!border-2 font-bold text-sm"
-              />
-              {formErrors.date && (
-                <p className="text-xs font-semibold text-neo-accent mt-1">
-                  {formErrors.date}
-                </p>
-              )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-neo-ink mb-1">
+                  Event Date *
+                </label>
+                <Input
+                  type="date"
+                  value={newEventForm.date}
+                  onChange={(e) =>
+                    setNewEventForm((prev) => ({ ...prev, date: e.target.value }))
+                  }
+                  className="!border-2 font-bold text-sm"
+                />
+                {formErrors.date && (
+                  <p className="text-xs font-semibold text-neo-accent mt-1">
+                    {formErrors.date}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-neo-ink mb-1">
+                  Scheduled Start Time (AM/PM)
+                </label>
+                <TimeInput12
+                  value={newEventForm.time || "09:00"}
+                  onChange={(t) =>
+                    setNewEventForm((prev) => ({ ...prev, time: t }))
+                  }
+                  className="w-full justify-between h-10"
+                />
+              </div>
             </div>
+            <p className="text-[11px] font-semibold text-neo-ink/70">
+              ⚡ Automatically starts event and stage run-sheet on this date and time.
+            </p>
           </div>
 
           <div>
@@ -332,6 +364,41 @@ export default function EventTaskboardsManager() {
               placeholder="e.g. Science Complex Main Hall"
               className="!border-2 font-medium text-sm"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-neo-ink mb-2 flex items-center justify-between">
+              <span>Event Theme Color</span>
+              <span className="text-[10px] font-black uppercase text-neo-ink/70">
+                {getEventTheme(newEventForm.themeColor).name}
+              </span>
+            </label>
+            <div className="flex items-center gap-3">
+              {EVENT_THEME_OPTIONS.map((c) => {
+                const isSelected = (newEventForm.themeColor || "amber") === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() =>
+                      setNewEventForm((prev) => ({ ...prev, themeColor: c.id }))
+                    }
+                    className={`w-8 h-8 rounded-full border-3 border-neo-ink flex items-center justify-center cursor-pointer transition-all ${
+                      isSelected
+                        ? "shadow-[2px_2px_0_#000] ring-2 ring-neo-ink ring-offset-2 scale-110"
+                        : "opacity-80 hover:opacity-100 hover:scale-105"
+                    }`}
+                    style={{ backgroundColor: c.hex }}
+                    title={c.name}
+                    aria-label={c.name}
+                  >
+                    {isSelected && (
+                      <Check size={16} strokeWidth={3.5} className="text-neo-ink" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t-2 border-neo-ink/20">
@@ -439,28 +506,53 @@ function EventCardItem({ event, onOpen, onEdit, onDelete, onPoster }) {
     return { total, backlog, todo, inProgress, done, completionRate };
   }, [tasks]);
 
+  const themeHex = getEventTheme(event.themeColor || event.color).hex;
+
   return (
     <div
       onClick={onOpen}
       className={[
         "bg-neo-white border-4 border-neo-ink shadow-neo p-5 sm:p-6 cursor-pointer select-none",
         "hover:shadow-neo-lg hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all duration-100 ease-linear",
-        "flex flex-col md:flex-row md:items-center justify-between gap-5",
+        "flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden",
       ].join(" ")}
     >
+      {/* Top Theme Accent Bar */}
+      <div
+        className="absolute top-0 left-0 right-0 h-1.5"
+        style={{ backgroundColor: themeHex }}
+      />
+
       {/* Left Info */}
       <div className="space-y-2 flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            color="secondary"
-            className="!text-[10px] !px-2.5 !py-0.5 font-bold !border-2"
+          <span
+            className="text-[10px] px-2.5 py-0.5 font-black uppercase border-2 border-neo-ink shadow-[1px_1px_0_#000] text-neo-ink"
+            style={{ backgroundColor: themeHex }}
           >
             {event.category}
-          </Badge>
+          </span>
+
+          {/* Status pill: Live Now vs Upcoming vs Completed */}
+          {event.status === "active" ? (
+            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 font-black uppercase bg-emerald-300 border-2 border-neo-ink shadow-[1px_1px_0_#000] text-neo-ink animate-pulse">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-800 animate-ping" />
+              Live Now
+            </span>
+          ) : event.status === "completed" ? (
+            <span className="text-[10px] px-2 py-0.5 font-bold uppercase bg-slate-200 border-2 border-neo-ink text-slate-700 shadow-[1px_1px_0_#000]">
+              Completed
+            </span>
+          ) : (
+            <span className="text-[10px] px-2 py-0.5 font-bold uppercase bg-neo-bg border-2 border-neo-ink text-neo-ink/70 shadow-[1px_1px_0_#000]">
+              Upcoming
+            </span>
+          )}
 
           <span className="flex items-center gap-1 text-xs font-medium text-neo-ink/80">
             <Calendar size={13} strokeWidth={2.5} />
-            {event.date}
+            {formatDateDMY(event.date)}
+            {event.time ? ` • ${formatTime12(event.time)}` : ""}
           </span>
 
           {event.location && (
@@ -493,19 +585,19 @@ function EventCardItem({ event, onOpen, onEdit, onDelete, onPoster }) {
         <div className="flex items-center gap-1.5 text-xs font-bold">
           <span
             title="Backlog"
-            className="bg-neo-muted border-2 border-neo-ink px-2 py-0.5 shadow-[1px_1px_0_#000]"
+            className="bg-[#CBD5E1] border-2 border-neo-ink px-2 py-0.5 shadow-[1px_1px_0_#000]"
           >
             {stats.backlog} Backlog
           </span>
           <span
             title="To Do"
-            className="bg-neo-white border-2 border-neo-ink px-2 py-0.5 shadow-[1px_1px_0_#000]"
+            className="bg-[#BFDBFE] border-2 border-neo-ink px-2 py-0.5 shadow-[1px_1px_0_#000]"
           >
             {stats.todo} To Do
           </span>
           <span
             title="In Progress"
-            className="bg-neo-secondary border-2 border-neo-ink px-2 py-0.5 shadow-[1px_1px_0_#000]"
+            className="bg-[#FED7AA] border-2 border-neo-ink px-2 py-0.5 shadow-[1px_1px_0_#000]"
           >
             {stats.inProgress} In Progress
           </span>
@@ -525,8 +617,11 @@ function EventCardItem({ event, onOpen, onEdit, onDelete, onPoster }) {
           </div>
           <div className="w-full h-3 bg-neo-white border-2 border-neo-ink overflow-hidden p-0.5 shadow-[1px_1px_0_#000]">
             <div
-              className="h-full bg-neo-accent border border-neo-ink transition-all duration-300"
-              style={{ width: `${stats.completionRate}%` }}
+              className="h-full border border-neo-ink transition-all duration-300"
+              style={{
+                width: `${stats.completionRate}%`,
+                backgroundColor: themeHex,
+              }}
             />
           </div>
         </div>

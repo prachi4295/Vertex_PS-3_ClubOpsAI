@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { Edit3, Calendar, MapPin, Tag } from "lucide-react";
-import { Modal, Input } from "./ui";
+import { Edit3, Calendar, MapPin, Tag, Check } from "lucide-react";
+import { Modal, Input, TimeInput12 } from "./ui";
 import Button from "./ui/Button";
+import { EVENT_THEME_OPTIONS, getEventTheme } from "../data/multiEvents";
 
 const CATEGORY_OPTIONS = [
   "Flagship Hackathon",
@@ -24,7 +25,9 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
     category: "Flagship Hackathon",
     tagline: "",
     date: "",
+    time: "09:00",
     location: "",
+    themeColor: "amber",
   });
   const [customCategory, setCustomCategory] = useState("");
   const [errors, setErrors] = useState({});
@@ -38,7 +41,9 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
         category: isStandardCat ? event.category : "Other",
         tagline: event.tagline || "",
         date: event.date || new Date().toISOString().split("T")[0],
+        time: event.time || "09:00",
         location: event.location || "",
+        themeColor: event.themeColor || event.color || "amber",
       });
       setCustomCategory(!isStandardCat ? event.category || "" : "");
     }
@@ -70,7 +75,10 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
         category: effectiveCategory,
         tagline: form.tagline.trim(),
         date: form.date,
+        time: form.time || "09:00",
         location: form.location.trim(),
+        themeColor: form.themeColor || "amber",
+        color: form.themeColor || "amber",
       };
 
       // Save to user-scoped storage
@@ -119,7 +127,7 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
           )}
         </div>
 
-        {/* Date & Location row */}
+        {/* Date & Time row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label
@@ -145,27 +153,47 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
 
           <div>
             <label
-              htmlFor="edit-event-location"
+              htmlFor="edit-event-time"
               className="block font-bold text-xs uppercase tracking-wider mb-1"
             >
-              Location / Venue *
+              Scheduled Start Time (AM/PM)
             </label>
-            <Input
-              id="edit-event-location"
-              placeholder="e.g. Main Auditorium & Hall B"
-              value={form.location}
-              onChange={(e) => {
-                setForm((prev) => ({ ...prev, location: e.target.value }));
-                if (errors.location) setErrors((prev) => ({ ...prev, location: undefined }));
+            <TimeInput12
+              id="edit-event-time"
+              value={form.time || "09:00"}
+              onChange={(t) => {
+                setForm((prev) => ({ ...prev, time: t }));
               }}
-              className={errors.location ? "!border-neo-accent" : ""}
+              className="w-full justify-between h-10"
             />
-            {errors.location && (
-              <p className="mt-1 font-bold text-xs text-neo-accent">
-                {errors.location}
-              </p>
-            )}
           </div>
+        </div>
+        <p className="text-[11px] font-semibold text-neo-ink/70">
+          ⚡ Automatically starts event and stage run-sheet on this date and time.
+        </p>
+
+        <div>
+          <label
+            htmlFor="edit-event-location"
+            className="block font-bold text-xs uppercase tracking-wider mb-1"
+          >
+            Location / Venue *
+          </label>
+          <Input
+            id="edit-event-location"
+            placeholder="e.g. Main Auditorium & Hall B"
+            value={form.location}
+            onChange={(e) => {
+              setForm((prev) => ({ ...prev, location: e.target.value }));
+              if (errors.location) setErrors((prev) => ({ ...prev, location: undefined }));
+            }}
+            className={errors.location ? "!border-neo-accent" : ""}
+          />
+          {errors.location && (
+            <p className="mt-1 font-bold text-xs text-neo-accent">
+              {errors.location}
+            </p>
+          )}
         </div>
 
         {/* Category with "Other" option (Item 15) */}
@@ -219,6 +247,42 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
               setForm((prev) => ({ ...prev, tagline: e.target.value }))
             }
           />
+        </div>
+
+        {/* Theme Color */}
+        <div>
+          <label className="block text-xs font-bold text-neo-ink mb-2 flex items-center justify-between">
+            <span>Event Theme Color</span>
+            <span className="text-[10px] font-black uppercase text-neo-ink/70">
+              {getEventTheme(form.themeColor).name}
+            </span>
+          </label>
+          <div className="flex items-center gap-3">
+            {EVENT_THEME_OPTIONS.map((c) => {
+              const isSelected = (form.themeColor || "amber") === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() =>
+                    setForm((prev) => ({ ...prev, themeColor: c.id }))
+                  }
+                  className={`w-8 h-8 rounded-full border-3 border-neo-ink flex items-center justify-center cursor-pointer transition-all ${
+                    isSelected
+                      ? "shadow-[2px_2px_0_#000] ring-2 ring-neo-ink ring-offset-2 scale-110"
+                      : "opacity-80 hover:opacity-100 hover:scale-105"
+                  }`}
+                  style={{ backgroundColor: c.hex }}
+                  title={c.name}
+                  aria-label={c.name}
+                >
+                  {isSelected && (
+                    <Check size={16} strokeWidth={3.5} className="text-neo-ink" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {errors.submit && (

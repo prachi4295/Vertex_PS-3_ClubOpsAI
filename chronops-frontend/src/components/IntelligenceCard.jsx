@@ -38,6 +38,7 @@ import {
   reframeTranscriptWithAI,
 } from "../services/gemini";
 import { setSessionsBatchForEvent } from "../hooks/useSessions";
+import { formatDuration } from "../lib/time";
 import { INITIAL_EVENTS } from "../data/multiEvents";
 import {
   getStoredEvents,
@@ -690,50 +691,43 @@ export default function IntelligenceCard() {
         size="lg"
       >
         <div className="space-y-4">
-          {/* Explicit Confirmation Prompt Banner */}
-          <div className="p-3.5 bg-neo-secondary/40 border-3 border-neo-ink space-y-1 shadow-[2px_2px_0_#000]">
-            <div className="flex items-center gap-2">
-              <Sparkles size={16} strokeWidth={3} className="text-neo-ink" />
-              <span className="font-black text-xs uppercase tracking-wide text-neo-ink">
-                AI Analysis Complete
-              </span>
-            </div>
-            <p className="text-xs font-bold text-neo-ink leading-relaxed">
-              AI has analyzed your transcript and extracted the event schedule and tasks below.
-              <strong> Would you like to create a new Event from this transcript, or add tasks to an existing event?</strong>
+          {/* Question & Choice Selector Box */}
+          <div className="p-3.5 bg-neo-secondary/30 hover:bg-neo-secondary/40 border-3 border-neo-ink shadow-[3px_3px_0_#000] space-y-3 transition-colors">
+            <p className="text-xs sm:text-sm font-bold text-neo-ink leading-relaxed">
+              Would you like to create a new Event from this transcript, or add tasks to an existing event?
             </p>
-          </div>
 
-          {/* Choice Selector: Create New Event vs Add to Existing */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirmChoice("create_new")}
-              className={`p-2.5 text-center border-3 border-neo-ink text-xs font-black uppercase tracking-wider transition-all cursor-pointer outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 select-none ${
-                confirmChoice === "create_new"
-                  ? "bg-neo-secondary text-neo-ink shadow-[2px_2px_0_#000] translate-x-[1px] translate-y-[1px]"
-                  : "bg-neo-white text-neo-ink hover:bg-neo-bg shadow-[2px_2px_0_#000]"
-              }`}
-            >
-              <div className="flex items-center justify-center gap-1.5">
-                <FolderPlus size={15} strokeWidth={3} />
-                <span>Create New Event Board</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmChoice("add_to_existing")}
-              className={`p-2.5 text-center border-3 border-neo-ink text-xs font-black uppercase tracking-wider transition-all cursor-pointer outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 select-none ${
-                confirmChoice === "add_to_existing"
-                  ? "bg-neo-secondary text-neo-ink shadow-[2px_2px_0_#000] translate-x-[1px] translate-y-[1px]"
-                  : "bg-neo-white text-neo-ink hover:bg-neo-bg shadow-[2px_2px_0_#000]"
-              }`}
-            >
-              <div className="flex items-center justify-center gap-1.5">
-                <Layers size={15} strokeWidth={3} />
-                <span>Add Tasks to Existing Event</span>
-              </div>
-            </button>
+            {/* Choice Selector: Create New Event vs Add to Existing */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmChoice("create_new")}
+                className={`p-2.5 text-center border-3 border-neo-ink text-xs font-black uppercase tracking-wider transition-all cursor-pointer outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 select-none ${
+                  confirmChoice === "create_new"
+                    ? "bg-neo-accent text-neo-ink hover:bg-neo-accent/90 shadow-[2px_2px_0_#000] translate-x-[1px] translate-y-[1px]"
+                    : "bg-neo-white text-neo-ink hover:bg-neo-accent/20 shadow-[2px_2px_0_#000]"
+                }`}
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  <FolderPlus size={15} strokeWidth={3} />
+                  <span>Create New Event Board</span>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmChoice("add_to_existing")}
+                className={`p-2.5 text-center border-3 border-neo-ink text-xs font-black uppercase tracking-wider transition-all cursor-pointer outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 select-none ${
+                  confirmChoice === "add_to_existing"
+                    ? "bg-neo-accent text-neo-ink hover:bg-neo-accent/90 shadow-[2px_2px_0_#000] translate-x-[1px] translate-y-[1px]"
+                    : "bg-neo-white text-neo-ink hover:bg-neo-accent/20 shadow-[2px_2px_0_#000]"
+                }`}
+              >
+                <div className="flex items-center justify-center gap-1.5">
+                  <Layers size={15} strokeWidth={3} />
+                  <span>Add Tasks to Existing Event</span>
+                </div>
+              </button>
+            </div>
           </div>
 
           {/* Missing Details Warning Banner (if any) */}
@@ -942,7 +936,7 @@ export default function IntelligenceCard() {
                         {s.title} {s.speaker ? `— ${s.speaker}` : ""}
                       </span>
                       <span className="text-[10px] font-black bg-neo-secondary px-2 py-0.5 border border-neo-ink ml-2 shrink-0">
-                        {s.startTime || "TBD"} ({s.durationMinutes || 30}m)
+                        {s.startTime || "TBD"} ({formatDuration(s.durationMinutes || 30)})
                       </span>
                     </div>
                   ))}
@@ -1066,7 +1060,7 @@ export default function IntelligenceCard() {
               size="sm"
               disabled={isCommitting}
               onClick={handleCancelPrompt}
-              className="hover:!bg-red-500 hover:!text-white hover:!border-neo-ink transition-colors"
+              className="hover:!bg-neo-accent hover:!text-neo-ink hover:!border-neo-ink transition-colors"
             >
               Cancel
             </Button>
