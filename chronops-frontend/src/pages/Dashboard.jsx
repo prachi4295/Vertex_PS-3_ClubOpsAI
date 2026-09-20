@@ -6,13 +6,14 @@ import EventTaskboardsManager from "../components/EventTaskboardsManager";
 import VolunteerManagement from "../components/VolunteerManagement";
 import LiveFlowView from "../components/LiveFlowView";
 import LiveStageView from "../components/LiveStageView";
+import Footer from "../components/Footer";
 import { useApp } from "../hooks/useApp";
 
 export default function Dashboard() {
   const { mode } = useApp();
 
   return (
-    <div className="min-h-screen bg-neo-bg relative">
+    <div className="min-h-screen bg-neo-bg relative flex flex-col justify-between">
       {/* Background textures */}
       <div className="fixed inset-0 texture-halftone" />
       <div className="fixed inset-0 texture-grid" />
@@ -58,6 +59,9 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }

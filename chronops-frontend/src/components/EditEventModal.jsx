@@ -3,6 +3,7 @@ import { Edit3, Calendar, MapPin, Tag, Check } from "lucide-react";
 import { Modal, Input, TimeInput12 } from "./ui";
 import Button from "./ui/Button";
 import { EVENT_THEME_OPTIONS, getEventTheme } from "../data/multiEvents";
+import { isEventDue } from "../lib/eventScheduler";
 
 const CATEGORY_OPTIONS = [
   "Flagship Hackathon",
@@ -69,6 +70,11 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
         ? (customCategory.trim() || "Other")
         : form.category;
 
+      const isDue = isEventDue({
+        date: form.date,
+        time: form.time || "09:00",
+      });
+
       const updatedEvent = {
         ...event,
         name: form.name.trim(),
@@ -76,6 +82,7 @@ export default function EditEventModal({ open, onClose, event, onEventUpdated })
         tagline: form.tagline.trim(),
         date: form.date,
         time: form.time || "09:00",
+        status: event.status === "completed" ? "completed" : (isDue ? "active" : "upcoming"),
         location: form.location.trim(),
         themeColor: form.themeColor || "amber",
         color: form.themeColor || "amber",

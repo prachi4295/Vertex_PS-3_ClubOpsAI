@@ -156,21 +156,6 @@ export default function LiveFlowView({ eventId }) {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Auto-Reflow Mode Toggle */}
-          <button
-            type="button"
-            onClick={() => setAutoReflow(!autoReflow)}
-            className={`text-[11px] font-black uppercase px-2.5 py-1 border-2 border-neo-ink shadow-[2px_2px_0_#000] cursor-pointer flex items-center gap-1.5 transition-all ${
-              autoReflow
-                ? "bg-neo-secondary text-neo-ink"
-                : "bg-neo-bg text-neo-ink/60"
-            }`}
-            title="When enabled, extending duration shifts downstream sessions to avoid overlaps"
-          >
-            <Zap size={12} strokeWidth={3} className={autoReflow ? "text-neo-ink fill-neo-ink" : "text-neo-ink/40"} />
-            Auto-Reflow: {autoReflow ? "ON" : "OFF"}
-          </button>
-
           {events.length > 1 && (
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold text-neo-ink/70 uppercase">Event:</span>
@@ -190,6 +175,21 @@ export default function LiveFlowView({ eventId }) {
               </select>
             </div>
           )}
+
+          {/* Auto-Reflow Mode Toggle */}
+          <button
+            type="button"
+            onClick={() => setAutoReflow(!autoReflow)}
+            className={`text-[11px] font-black uppercase px-2.5 py-1 border-2 border-neo-ink shadow-[2px_2px_0_#000] cursor-pointer flex items-center gap-1.5 transition-all ${
+              autoReflow
+                ? "bg-neo-secondary text-neo-ink"
+                : "bg-neo-bg text-neo-ink/60"
+            }`}
+            title="When enabled, extending duration shifts downstream sessions to avoid overlaps"
+          >
+            <Zap size={12} strokeWidth={3} className={autoReflow ? "text-neo-ink fill-neo-ink" : "text-neo-ink/40"} />
+            Auto-Reflow: {autoReflow ? "ON" : "OFF"}
+          </button>
         </div>
       </div>
 
@@ -259,9 +259,11 @@ export default function LiveFlowView({ eventId }) {
                       {session.title}
                     </h3>
 
-                    <p className="text-sm font-medium text-neo-ink/85">
-                      Speaker: <span className="font-bold text-neo-ink">{session.speaker || "General Stage"}</span>
-                    </p>
+                    {session.speaker && (
+                      <p className="text-sm font-bold text-neo-ink">
+                        {session.speaker}
+                      </p>
+                    )}
 
                     <p className="text-xs font-semibold text-neo-ink/70 flex items-center gap-1.5 pt-0.5">
                       <Clock size={13} strokeWidth={2.5} />

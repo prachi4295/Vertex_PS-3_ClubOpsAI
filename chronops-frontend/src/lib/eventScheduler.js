@@ -7,6 +7,40 @@ import { splitTime12, joinTime24 } from "./time";
  */
 
 /**
+ * Normalizes any date representation (YYYY-MM-DD, DD-MM-YYYY, DD/MM/YYYY, Date object)
+ * into a canonical YYYY-MM-DD string for reliable chronological comparison.
+ *
+ * @param {string|Date} dateVal
+ * @returns {string} "YYYY-MM-DD"
+ */
+export function normalizeDateYMD(dateVal) {
+  if (!dateVal) return "";
+  if (dateVal instanceof Date && !isNaN(dateVal.getTime())) {
+    const y = dateVal.getFullYear();
+    const m = String(dateVal.getMonth() + 1).padStart(2, "0");
+    const d = String(dateVal.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  const str = String(dateVal).split("T")[0].trim();
+  // Match DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (dmyMatch) {
+    const [, d, m, y] = dmyMatch;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  // Match YYYY-MM-DD or YYYY/MM/DD
+  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (ymdMatch) {
+    const [, y, m, d] = ymdMatch;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  return str;
+}
+
+/**
  * Checks whether an event's scheduled date & time has arrived or passed.
  *
  * @param {Object} event - Event object with { date, time }
@@ -21,8 +55,8 @@ export function isEventDue(event, currentTime = new Date()) {
       ? currentTime
       : new Date();
 
-  // Extract event date (YYYY-MM-DD)
-  const eventDateStr = String(event.date).split("T")[0].trim();
+  // Normalize event date to canonical YYYY-MM-DD
+  const eventDateStr = normalizeDateYMD(event.date);
   // Normalize event scheduled time to 24h "HH:mm" (handles both "14:30" and "02:30 PM")
   const parsedTime = splitTime12(event.time || "09:00");
   const eventTimeStr = joinTime24(parsedTime.hour12, parsedTime.minute, parsedTime.period);
@@ -42,14 +76,14 @@ export function isEventDue(event, currentTime = new Date()) {
     return true; // Past date
   }
   if (currentDateStr === eventDateStr) {
-    return currentHHMM >= eventTimeStr; // Same date, time arrived
+    return currentHHMM >= eventTimeStr; // Same date, time arrived or passed
   }
   return false; // Future date
 }
 
 /**
  * Checks all events and auto-starts any upcoming event whose scheduled date & time has arrived.
- * Also starts the event's first session if no session is currently running.
+ * Also resets any active event whose scheduled date & time is in the future back to upcoming.
  *
  * @param {Object} options
  * @param {Array} options.events - Array of event objects
@@ -131,6 +165,16 @@ export function processAutoStartEvents({
       }
 
       return started;
+    }
+
+    // If an event is currently marked active but its scheduled date/time is in the future
+    // (e.g. user moved the date to tomorrow), revert it back to upcoming:
+    if (!due && event.status === "active") {
+      hasChanges = true;
+      return {
+        ...event,
+        status: "upcoming",
+      };
     }
 
     return event;

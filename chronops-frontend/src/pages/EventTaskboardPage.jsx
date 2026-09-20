@@ -16,6 +16,7 @@ import {
 import Header from "../components/Header";
 import KanbanBoard from "../components/KanbanBoard";
 import EditEventModal from "../components/EditEventModal";
+import Footer from "../components/Footer";
 import { Badge, Modal } from "../components/ui";
 import Button from "../components/ui/Button";
 import { INITIAL_EVENTS, getEventTheme } from "../data/multiEvents";
@@ -58,22 +59,19 @@ export default function EventTaskboardPage() {
     } catch (e) {
       console.warn("Failed to load event metadata:", e);
     }
-    const preset = INITIAL_EVENTS.find((e) => e.id === eventId);
-    if (preset) return preset;
-
-    // Fallback for custom or unknown IDs
-    return {
-      id: eventId,
-      name: eventId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-      category: "Event",
-      tagline: "Dedicated event operations and taskboard.",
-      date: "2026-09-19",
-      location: "Campus Venue",
-      color: "secondary",
-    };
+    return INITIAL_EVENTS.find((e) => e.id === eventId) || null;
   }, [eventId, eventOverride, refreshTick]);
 
-  const { tasks } = useTasks(eventId);
+  const eventTheme = useMemo(() => {
+    return getEventTheme(event?.themeColor || event?.color || "amber");
+  }, [event]);
+
+  // Read tasks for this specific event
+  const { tasks: allTasks } = useTasks();
+  const tasks = useMemo(() => {
+    if (!eventId) return [];
+    return allTasks.filter((t) => t.eventId === eventId);
+  }, [allTasks, eventId]);
 
   // Compute live stats for header
   const stats = useMemo(() => {
@@ -93,22 +91,50 @@ export default function EventTaskboardPage() {
   };
 
   const handleDeleteBoard = () => {
+    if (!event) return;
     try {
-      const list = getStoredEvents();
-      const updated = list.filter((e) => e.id !== eventId);
-      saveStoredEvents(updated);
-      removeStoredTasks(eventId);
-      removeStoredSessions(eventId);
+      const stored = getStoredEvents();
+      const filtered = stored.filter((e) => e.id !== event.id);
+      saveStoredEvents(filtered);
+      removeStoredTasks(event.id);
+      removeStoredSessions(event.id);
+      window.dispatchEvent(new CustomEvent("clubops-data-updated"));
     } catch (e) {
-      console.warn("Failed to delete event board:", e);
+      console.error("Failed to delete event board:", e);
     }
     setDeleteConfirmOpen(false);
     goTasks();
     navigate("/");
   };
 
+  if (!event) {
+    return (
+      <div className="min-h-screen bg-neo-bg relative flex flex-col justify-between">
+        <div className="fixed inset-0 texture-halftone pointer-events-none" />
+        <div className="fixed inset-0 texture-grid pointer-events-none" />
+        <div className="fixed inset-0 texture-noise pointer-events-none" />
+        <div className="relative z-40">
+          <Header />
+        </div>
+        <main className="relative z-10 max-w-xl mx-auto px-4 py-20 text-center space-y-6 flex-1">
+          <div className="bg-neo-white border-4 border-neo-ink p-8 shadow-neo space-y-4">
+            <AlertTriangle size={48} strokeWidth={2.5} className="mx-auto text-neo-accent" />
+            <h1 className="text-2xl font-black uppercase text-neo-ink">Event Not Found</h1>
+            <p className="text-xs font-bold text-neo-ink/70 uppercase">
+              The event taskboard you are looking for does not exist or has been deleted.
+            </p>
+            <Button variant="primary" onClick={handleBackToDirectory}>
+              Back to Directory
+            </Button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-neo-bg relative">
+    <div className="min-h-screen bg-neo-bg relative flex flex-col justify-between">
       {/* Background textures */}
       <div className="fixed inset-0 texture-halftone pointer-events-none" />
       <div className="fixed inset-0 texture-grid pointer-events-none" />
@@ -306,6 +332,9 @@ export default function EventTaskboardPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }

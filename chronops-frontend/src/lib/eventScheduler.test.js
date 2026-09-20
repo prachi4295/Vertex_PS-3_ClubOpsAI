@@ -1,12 +1,28 @@
 import { describe, it, expect, vi } from "vitest";
-import { isEventDue, processAutoStartEvents } from "./eventScheduler";
+import { isEventDue, processAutoStartEvents, normalizeDateYMD } from "./eventScheduler";
 
 describe("Event Auto-Start Scheduler (eventScheduler.js)", () => {
+  describe("normalizeDateYMD", () => {
+    it("normalizes DD-MM-YYYY and DD/MM/YYYY into YYYY-MM-DD", () => {
+      expect(normalizeDateYMD("21-09-2026")).toBe("2026-09-21");
+      expect(normalizeDateYMD("05/01/2025")).toBe("2025-01-05");
+      expect(normalizeDateYMD("31-12-2024")).toBe("2024-12-31");
+    });
+
+    it("normalizes Date objects and ISO strings", () => {
+      expect(normalizeDateYMD("2026-09-21T00:00:00.000Z")).toBe("2026-09-21");
+      const d = new Date(2026, 8, 21);
+      expect(normalizeDateYMD(d)).toBe("2026-09-21");
+    });
+  });
+
   describe("isEventDue", () => {
-    it("returns false for events in future dates", () => {
-      const event = { date: "2026-10-15", time: "10:00" };
-      const now = new Date("2026-09-20T10:00:00");
-      expect(isEventDue(event, now)).toBe(false);
+    it("returns false for events in future dates (handles DD-MM-YYYY too)", () => {
+      const event1 = { date: "2026-10-15", time: "10:00" };
+      const event2 = { date: "21-09-2026", time: "10:00" }; // Tomorrow
+      const now = new Date(2026, 8, 20, 16, 30, 0); // Today 2026-09-20
+      expect(isEventDue(event1, now)).toBe(false);
+      expect(isEventDue(event2, now)).toBe(false);
     });
 
     it("returns false if on the same date but before the scheduled time", () => {
@@ -129,6 +145,27 @@ describe("Event Auto-Start Scheduler (eventScheduler.js)", () => {
       expect(hasChanges).toBe(false);
       expect(startedEvents).toHaveLength(0);
       expect(onEventStarted).not.toHaveBeenCalled();
+    });
+
+    it("reverts active status back to upcoming if event date is moved to future", () => {
+      const now = new Date(2026, 8, 20, 16, 0, 0); // Today is 20-09-2026
+      const events = [
+        {
+          id: "chronops-26",
+          name: "ChronOps26 Operations Summit",
+          date: "21-09-2026", // Tomorrow!
+          time: "09:00",
+          status: "active", // Incorrectly was active
+        },
+      ];
+
+      const { updatedEvents, hasChanges } = processAutoStartEvents({
+        events,
+        currentTime: now,
+      });
+
+      expect(hasChanges).toBe(true);
+      expect(updatedEvents[0].status).toBe("upcoming");
     });
   });
 });

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { Badge, Input, Modal, Button } from "../components/ui";
+import Footer from "../components/Footer";
 
 export default function Login() {
   const {
@@ -118,19 +119,14 @@ export default function Login() {
 
       {/* ─── Top Brand Bar ─── */}
       <header className="relative z-10 w-full border-b-4 border-neo-ink bg-neo-white px-4 sm:px-6 py-3.5 flex items-center justify-between shadow-neo-sm">
-        {/* Left spacer to ensure ChronOps is perfectly centered */}
-        <div className="flex-1 flex items-center justify-start" />
-
-        {/* Middle Brand Name */}
-        <div className="flex items-center justify-center">
-          <div className="flex items-center gap-2 bg-neo-ink text-neo-white px-4 py-1.5 font-black tracking-wider text-sm sm:text-base border-2 border-neo-ink shadow-[2px_2px_0_#000]">
-            <span className="w-2.5 h-2.5 bg-neo-accent rounded-full animate-pulse" />
-            ChronOps
-          </div>
+        {/* Left End: Brand Logo */}
+        <div className="flex items-center gap-2 bg-neo-ink text-neo-white px-3.5 py-1.5 font-black tracking-wider text-sm border-2 border-neo-ink shadow-[2px_2px_0_#000]">
+          <span className="w-2.5 h-2.5 bg-neo-accent rounded-full animate-pulse" />
+          ChronOps
         </div>
 
         {/* Right Corner: Login / Sign Up options */}
-        <div className="flex-1 flex items-center justify-end gap-2">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => {
@@ -166,46 +162,45 @@ export default function Login() {
         </div>
       </header>
 
-      {/* ─── Main Hero Content ─── */}
-      <main className="relative z-10 max-w-4xl mx-auto w-full px-4 py-8 sm:py-14 flex flex-col items-center">
-        {/* Floating Decorative Badges */}
-        <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
-          <Badge color="accent" rotate className="!text-xs !px-3 !py-1">
-            ⚡ CHRONOPS 2026
+      {/* ─── Main Auth Content ─── */}
+      <main className="relative z-10 max-w-4xl mx-auto w-full px-4 py-6 sm:py-10 flex flex-col items-center justify-center flex-1">
+        {/* ─── Funky Decorative Badges (Above Title) ─── */}
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-5">
+          <Badge
+            color="accent"
+            rotate
+            className="!text-xs !px-3.5 !py-1 !rounded-full shadow-neo-sm font-black uppercase -rotate-2"
+          >
+            📋 Kanban Boards
           </Badge>
-          <Badge color="secondary" className="!text-xs !px-3 !py-1">
-            LIVE STAGE & OPS
+          <Badge
+            color="secondary"
+            className="!text-xs !px-3.5 !py-1 !rounded-full shadow-neo-sm font-black uppercase rotate-2"
+          >
+            ⏱️ Live Stage Sync
           </Badge>
-          <Badge color="muted" rotate className="!text-xs !px-3 !py-1">
-            AI RADAR READY
+          <Badge
+            color="muted"
+            rotate
+            className="!text-xs !px-3.5 !py-1 !rounded-full shadow-neo-sm font-black uppercase -rotate-1"
+          >
+            ⚡ Gemini AI Ops
           </Badge>
         </div>
 
-        {/* Hero Title */}
-        <div className="text-center mb-8 sm:mb-10 max-w-2xl">
-          <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-neo-ink uppercase leading-[1.05] mb-4">
-            Unified Event <br />
+        {/* ─── Hero Title (Styled like reference picture) ─── */}
+        <div className="text-center mb-6 sm:mb-8 max-w-xl">
+          <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-neo-ink uppercase leading-[1.05]">
+            Smart Event <br />
             <span className="bg-neo-secondary px-3 py-0.5 border-4 border-neo-ink inline-block shadow-[4px_4px_0_#000] -rotate-1 mt-1">
-              Command Center
+              Operations
             </span>
           </h1>
-          <p className="text-base sm:text-lg font-bold text-neo-ink/80 max-w-xl mx-auto uppercase tracking-wide">
-            Automate hackathon ops, sync live stage run-sheets, and eliminate stage overrun panic with Gemini & Firebase.
-          </p>
         </div>
 
         {/* ─── Unified Auth Box ─── */}
         <div id="auth-card" className="w-full max-w-md">
           <div className="bg-neo-white border-4 border-neo-ink shadow-neo-lg p-6 sm:p-8 relative">
-            {/* Corner sticker */}
-            <div className="absolute -top-4 -right-3 rotate-3">
-              <Badge
-                color={authMode === "signup" ? "accent" : "secondary"}
-                className="!text-xs !px-3 !py-1 !border-2 shadow-[2px_2px_0_#000]"
-              >
-                {authMode === "signup" ? "SIGN UP" : "LOG IN"}
-              </Badge>
-            </div>
 
             {/* Mode Switcher Tabs */}
             <div className="flex border-3 border-neo-ink bg-neo-bg p-1 shadow-[2px_2px_0_#000] mb-5">
@@ -520,10 +515,7 @@ export default function Login() {
       </main>
 
       {/* ─── Footer ─── */}
-      <footer className="relative z-10 w-full border-t-4 border-neo-ink bg-neo-white px-6 py-3 flex items-center justify-between text-xs font-black uppercase text-neo-ink tracking-wider">
-        <span>ChronOps • Event Operations</span>
-        <span>Powered by Gemini AI</span>
-      </footer>
+      <Footer />
 
       {/* ─── Google Account Modal ─── */}
       <Modal
