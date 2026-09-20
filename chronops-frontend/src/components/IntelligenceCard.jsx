@@ -1066,6 +1066,7 @@ export default function IntelligenceCard() {
               size="sm"
               disabled={isCommitting}
               onClick={handleCancelPrompt}
+              className="hover:!bg-red-500 hover:!text-white hover:!border-neo-ink transition-colors"
             >
               Cancel
             </Button>
