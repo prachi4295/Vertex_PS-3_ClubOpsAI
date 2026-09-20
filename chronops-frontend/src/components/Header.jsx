@@ -281,22 +281,44 @@ export default function Header() {
                 </span>
               )
             }
-            items={[
-              {
-                label: user?.displayName ? user.displayName.slice(0, 20) : (user?.email || "Profile"),
-                icon: User,
-                onClick: () => {},
-              },
-              {
-                label: "Sign Out",
-                icon: LogOut,
-                onClick: async () => {
-                  await signOutUser();
-                  navigate("/login");
-                },
-              },
-            ]}
-          />
+          >
+            {(close) => (
+              <div className="min-w-[220px]">
+                {/* User Info Header */}
+                <div className="px-4 py-3 border-b-2 border-neo-ink bg-neo-white flex items-start gap-2.5">
+                  <User size={16} strokeWidth={2.5} className="mt-0.5 shrink-0 text-neo-ink" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm text-neo-ink leading-snug truncate">
+                      {user?.displayName || "Profile"}
+                    </p>
+                    {(user?.email || localStorage.getItem("clubops_current_user_email")) && (
+                      <p
+                        className="font-semibold text-xs text-neo-ink/60 truncate mt-0.5"
+                        title={user?.email || localStorage.getItem("clubops_current_user_email")}
+                      >
+                        {user?.email || localStorage.getItem("clubops_current_user_email")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sign Out Action */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={async () => {
+                    close();
+                    await signOutUser();
+                    navigate("/login");
+                  }}
+                  className="w-full text-left px-4 py-2.5 font-bold text-sm text-neo-ink hover:bg-neo-secondary cursor-pointer border-0 bg-transparent flex items-center gap-2 transition-colors"
+                >
+                  <LogOut size={16} strokeWidth={2.5} />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            )}
+          </Dropdown>
         </div>
 
         {/* ─── Mobile mode tabs ─── */}
