@@ -544,7 +544,7 @@ export default function IntelligenceCard() {
 
           {/* Transcript Textarea with Drag and Drop Support */}
           <div
-            className={`relative transition-all ${
+            className={`transition-all ${
               isDragging ? "ring-4 ring-neo-accent" : ""
             }`}
             onDragOver={(e) => {
@@ -572,45 +572,49 @@ export default function IntelligenceCard() {
               }
             }}
           >
-            {isDragging && (
-              <div className="absolute inset-0 bg-neo-secondary/95 border-4 border-dashed border-neo-ink z-20 flex flex-col items-center justify-center p-4 pointer-events-none">
-                <UploadCloud size={36} strokeWidth={3} className="text-neo-ink animate-bounce" />
-                <span className="font-black text-sm uppercase text-neo-ink mt-2">
-                  Drop text file to load transcript
-                </span>
-              </div>
-            )}
+            {/* Dedicated relative wrapper for Textarea + mic button to keep position strictly locked */}
+            <div className="relative">
+              {isDragging && (
+                <div className="absolute inset-0 bg-neo-secondary/95 border-4 border-dashed border-neo-ink z-20 flex flex-col items-center justify-center p-4 pointer-events-none">
+                  <UploadCloud size={36} strokeWidth={3} className="text-neo-ink animate-bounce" />
+                  <span className="font-black text-sm uppercase text-neo-ink mt-2">
+                    Drop text file to load transcript
+                  </span>
+                </div>
+              )}
 
-            <Textarea
-              rows={5}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Paste standup notes or transcript. AI will extract event details, sessions, and tasks, then prompt to create the event..."
-              className="!text-xs leading-relaxed !resize-none !pr-14 !pb-12"
-            />
+              <Textarea
+                rows={5}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Paste standup notes or transcript. AI will extract event details, sessions, and tasks, then prompt to create the event..."
+                className="!text-xs leading-relaxed !resize-none !pr-14 !pb-12"
+              />
 
-            {/* Voice Input Trigger Icon neatly nested inside textarea with proper spacing */}
-            {isSpeechSupported && (
-              <button
-                type="button"
-                onClick={toggleRecording}
-                className={[
-                  "absolute right-3.5 bottom-3.5 z-10 w-8 h-8 flex items-center justify-center border-2 border-neo-ink cursor-pointer transition-all",
-                  isRecording
-                    ? "bg-neo-accent text-neo-white animate-pulse shadow-[2px_2px_0_#000]"
-                    : "bg-neo-white text-neo-ink hover:bg-neo-secondary shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none",
-                ].join(" ")}
-                title={isRecording ? "Stop recording" : `Voice dictation (${speechLang})`}
-                aria-label={isRecording ? "Stop voice dictation" : "Start voice dictation"}
-              >
-                {isRecording ? <MicOff size={15} strokeWidth={2.5} /> : <Mic size={15} strokeWidth={2.5} />}
-              </button>
-            )}
+              {/* Voice Input Trigger Icon strictly locked to textarea inner bottom-right */}
+              {isSpeechSupported && (
+                <button
+                  type="button"
+                  onClick={toggleRecording}
+                  className={[
+                    "absolute right-3.5 bottom-3.5 z-10 w-8 h-8 flex items-center justify-center border-2 border-neo-ink cursor-pointer transition-all",
+                    isRecording
+                      ? "bg-neo-accent text-neo-white animate-pulse shadow-[2px_2px_0_#000]"
+                      : "bg-neo-white text-neo-ink hover:bg-neo-secondary shadow-[2px_2px_0_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none",
+                  ].join(" ")}
+                  title={isRecording ? "Stop recording" : `Voice dictation (${speechLang})`}
+                  aria-label={isRecording ? "Stop voice dictation" : "Start voice dictation"}
+                >
+                  {isRecording ? <MicOff size={15} strokeWidth={2.5} /> : <Mic size={15} strokeWidth={2.5} />}
+                </button>
+              )}
+            </div>
 
+            {/* Live speech feedback pill rendered cleanly below the textarea without displacing the mic */}
             {interimText && (
-              <div className="mt-1 px-2 py-1 bg-neo-secondary/30 text-[10px] font-semibold text-neo-ink animate-pulse flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-neo-accent rounded-full animate-ping" />
-                <span className="truncate">"{interimText}"</span>
+              <div className="mt-1.5 px-3 py-1.5 bg-amber-50 border-2 border-neo-ink text-xs font-bold text-neo-ink animate-pulse flex items-center gap-2 shadow-[2px_2px_0_#000]">
+                <span className="w-2 h-2 bg-neo-accent rounded-full animate-ping shrink-0" />
+                <span className="truncate">Listening: "{interimText}"</span>
               </div>
             )}
           </div>
